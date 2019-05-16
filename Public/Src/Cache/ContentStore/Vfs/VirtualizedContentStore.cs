@@ -20,11 +20,14 @@ namespace BuildXL.Cache.ContentStore.Vfs
     {
         private IContentStore InnerStore { get; }
 
+        internal VirtualizationRegistry Overlay { get; }
+
         protected override Tracer Tracer { get; } = new Tracer(nameof(VirtualizedContentStore));
 
         /// <nodoc />
         public VirtualizedContentStore(IContentStore innerStore)
         {
+            // Create long-lived session to be used with overlay (ImplicitPin=false to avoid cache full errors)
             InnerStore = innerStore;
         }
 

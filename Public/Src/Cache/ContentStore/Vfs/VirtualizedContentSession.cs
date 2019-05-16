@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.ContractsLight;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -33,7 +34,6 @@ namespace BuildXL.Cache.ContentStore.Vfs
         public VirtualizedContentSession(VirtualizedContentStore store, IContentSession session, string name)
             : base(name)
         {
-            // TODO: ImplicitPin?
             Store = store;
             InnerSession = session;
         }
@@ -49,9 +49,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
         protected override async Task<BoolResult> ShutdownCoreAsync(OperationContext context)
         {
             var result = await base.ShutdownCoreAsync(context);
-
             result &= await InnerSession.ShutdownAsync(context);
-
             return result;
         }
 
@@ -74,9 +72,39 @@ namespace BuildXL.Cache.ContentStore.Vfs
         }
 
         /// <inheritdoc />
-        protected override Task<PlaceFileResult> PlaceFileCoreAsync(OperationContext operationContext, ContentHash contentHash, AbsolutePath path, FileAccessMode accessMode, FileReplacementMode replacementMode, FileRealizationMode realizationMode, UrgencyHint urgencyHint, Counter retryCounter)
+        protected async override Task<PlaceFileResult> PlaceFileCoreAsync(OperationContext operationContext, ContentHash contentHash, AbsolutePath path, FileAccessMode accessMode, FileReplacementMode replacementMode, FileRealizationMode realizationMode, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            return InnerSession.PlaceFileAsync(operationContext, contentHash, path, accessMode, replacementMode, realizationMode, operationContext.Token, urgencyHint);
+            var virtualPath = Store.Overlay.ToVirtualPath(path);
+
+            if (!Store.Overlay.TryPlaceFile(
+                    virtualPath, 
+                    contentHash, 
+                    realizationMode, 
+                    accessMode, 
+                    overwrite: replacementMode == FileReplacementMode.ReplaceExisting, 
+                    errorResult: out var errorResult))
+            {
+                if (errorResult != null)
+                {
+                    return new PlaceFileResult(errorResult);
+                }
+                else if (replacementMode == FileReplacementMode.FailIfExists)
+                {
+                    return Placeholder.Todo<PlaceFileResult>("Cannot overwrite place result");
+                }
+                else
+                {
+                    Contract.Assert(replacementMode == FileReplacementMode.SkipIfExists);
+                    return Placeholder.Todo<PlaceFileResult>("Skipped place result");
+                }
+            }
+
+            return new PlaceFileResult(GetResultCode(realizationMode, accessMode), fileSize: -1 /* Unknown */);
+        }
+
+        private PlaceFileResult.ResultCode GetResultCode(FileRealizationMode realizationMode, FileAccessMode accessMode)
+        {
+            throw new NotImplementedException();
         }
 
         /// <inheritdoc />

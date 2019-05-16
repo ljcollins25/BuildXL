@@ -43,7 +43,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
                 // Map junctions into VFS root
                 foreach (var mount in configuration.VirtualizationMounts)
                 {
-                    CreateJunction(context, source: mount.Value, target: configuration.VfsRootPath / mount.Key);
+                    CreateJunction(context, source: mount.Value, target: configuration.VfsMountRootPath / mount.Key);
                 }
 
                 var clientContentStore = new ServiceClientContentStore(
