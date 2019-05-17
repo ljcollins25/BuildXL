@@ -196,7 +196,7 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             return Enumerable.Empty<VfsNode>();
         }
 
-        protected async Task<HResult> HydrateFileAsync(VirtualFileBase virtualFile, uint bufferSize, Func<byte[], uint, bool> tryWriteBytes)
+        protected async Task<HResult> HydrateFileAsync(VirtualFile virtualFile, uint bufferSize, Func<byte[], uint, bool> tryWriteBytes)
         {
             var openStreamResult = await virtualFile.TryOpenStreamAsync();
             if (!openStreamResult.Succeeded)
@@ -372,7 +372,7 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             else
             {
                 hr = virtualizationInstance.WritePlaceholderInfo(
-                    relativePath: Path.Combine(Path.GetDirectoryName(relativePath), node.Name),
+                    relativePath: relativePath.EndsWith(node.Name) ? relativePath : Path.Combine(Path.GetDirectoryName(relativePath), node.Name),
                     creationTime: node.Timestamp,
                     lastAccessTime: node.Timestamp,
                     lastWriteTime: node.Timestamp,
@@ -382,6 +382,8 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                     isDirectory: node.IsDirectory,
                     contentId: new byte[] { 0 },
                     providerId: new byte[] { 1 });
+
+                // TODO: Set ACLs on placeholder file
             }
 
             Log.Info("<---- GetPlaceholderInfoCallback {Result}", hr);
@@ -457,23 +459,24 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
         {
             Log.Info("----> QueryFileNameCallback relativePath [{Path}]", relativePath);
 
-            string parentPath = Path.GetDirectoryName(relativePath);
-            string childName = Path.GetFileName(relativePath);
-            if (!Utils.DoesNameContainWildCards(childName))
+            // First try normal lookup
+            if (Tree.TryGetNode(relativePath, out var node))
             {
-                // No wildcards just do normal lookup of the file
-                if (Tree.TryGetNode(relativePath, out var node))
-                {
-                    return HResult.Ok;
-                }
-                else
-                {
-                    return HResult.FileNotFound;
-                }
+                return HResult.Ok;
             }
+
+            if (!Utils.DoesNameContainWildCards(relativePath))
+            {
+                // No wildcards and normal lookup failed so file must not exist
+                return HResult.FileNotFound;
+            }
+
+            // There are wildcards, enumerate and try to find a matching child
+            string parentPath = Path.GetDirectoryName(relativePath);
 
             if (Tree.TryGetNode(parentPath, out var parent) && parent is VfsDirectoryNode parentDirectory)
             {
+                string childName = Path.GetFileName(relativePath);
                 if (parentDirectory.EnumerateChildren().Any(child => Utils.IsFileNameMatch(child.Name, childName)))
                 {
                     return HResult.Ok;

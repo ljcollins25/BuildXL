@@ -34,16 +34,19 @@ namespace BuildXL.Cache.ContentStore.Vfs
     /// </summary>
     public class VfsTree
     {
-        private readonly ConcurrentBigMap<string, VfsNode> _nodeMap = new ConcurrentBigMap<string, VfsNode>(StringComparer.OrdinalIgnoreCase);
-
-        private static readonly char Separator = Path.DirectorySeparatorChar;
+        private readonly ConcurrentBigMap<string, VfsNode> _nodeMap = new ConcurrentBigMap<string, VfsNode>(keyComparer: StringComparer.OrdinalIgnoreCase);
 
         public VfsDirectoryNode Root;
 
+        public VfsTree()
+        {
+            Root = new VfsDirectoryNode(string.Empty, DateTime.UtcNow, null);
+            _nodeMap[string.Empty] = Root;
+        }
 
         public bool TryGetNode(string relativePath, out VfsNode node)
         {
-            throw new NotImplementedException();
+            return _nodeMap.TryGetValue(relativePath, out node);
         }
 
         public VfsFileNode AddFileNode(string relativePath, DateTime timestamp, ContentHash hash, FileRealizationMode realizationMode, FileAccessMode accessMode)
@@ -142,8 +145,6 @@ namespace BuildXL.Cache.ContentStore.Vfs
 
     public class VfsDirectoryNode : VfsNode
     {
-        public override bool IsDirectory => true;
-
         public VfsNode FirstChild;
 
         public VfsDirectoryNode(string name, DateTime timestamp, VfsDirectoryNode parent)
@@ -164,8 +165,6 @@ namespace BuildXL.Cache.ContentStore.Vfs
 
     public class VfsFileNode : VfsNode
     {
-        public override bool IsDirectory => false;
-
         public readonly ContentHash Hash;
         public readonly FileRealizationMode RealizationMode;
         public readonly FileAccessMode AccessMode;

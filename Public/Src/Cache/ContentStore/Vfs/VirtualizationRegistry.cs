@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using BuildXL.Cache.ContentStore.Distributed.Utilities;
+using BuildXL.Cache.ContentStore.FileSystem;
 using BuildXL.Cache.ContentStore.Hashing;
 using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 using BuildXL.Cache.ContentStore.Interfaces.Results;
@@ -24,8 +25,8 @@ using BuildXL.Utilities.Collections;
 
 namespace BuildXL.Cache.ContentStore.Vfs
 {
-    using VirtualPath = Utilities.AbsolutePath;
-    using AbsPath = Interfaces.FileSystem.AbsolutePath;
+    using VirtualPath = System.String;
+    using FullPath = Interfaces.FileSystem.AbsolutePath;
 
     /// <summary>
     /// A store which virtualizes calls to an underlying content store (i.e. content will
@@ -36,15 +37,15 @@ namespace BuildXL.Cache.ContentStore.Vfs
         // TODO: Track stats about file materialization (i.e. how much content was hydrated)
         // On Domino side, track how much requested total requested file content size would be.
 
-        private readonly ConcurrentBigMap<VirtualPath, ContentInfo> _contentInfoByPath
-            = new ConcurrentBigMap<VirtualPath, ContentInfo>();
+        // TODO: Allow switching between hydration on CreatePlaceholder and GetFileData
 
-        private readonly PathTable _pathTable;
-        private readonly BigBuffer<PathExistence> _existenceBuffer;
+        private readonly VfsTree _tree;
 
         private IContentSession FullSession;
         private ILocalFileSystemContentSession LocalOnlySession;
         private bool eagerlyPlaceLocallyAvailableFiles;
+        private DisposableDirectory _tempDirectory;
+        private PassThroughFileSystem _fileSystem;
 
         internal VirtualPath ToVirtualPath(Interfaces.FileSystem.AbsolutePath path)
         {
@@ -56,51 +57,14 @@ namespace BuildXL.Cache.ContentStore.Vfs
             throw new NotImplementedException();
         }
 
-        internal void MarkFileExistence(VirtualPath path)
+        internal FullPath ToFullPath(string relativePath)
         {
-            var index = path.Value.Index;
-            _existenceBuffer.Initialize(index + 1, initializeSequentially: true);
-            _existenceBuffer[index] = PathExistence.ExistsAsFile;
-
-            while (true)
-            {
-                path = path.GetParent(_pathTable);
-                if (path.IsValid && _existenceBuffer[path.Value.Index] == PathExistence.Nonexistent)
-                {
-                    _existenceBuffer[path.Value.Index] = PathExistence.ExistsAsDirectory;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-
-        public IEnumerable<(string name, PathExistence existence)> GetChildren(string relativePath)
-        {
-            
-        }
-
-        public IEnumerable<(string name, PathExistence existence)> GetChildren(VirtualPath path)
-        {
-            foreach (var item in _pathTable.EnumerateImmediateChildren(path.Value))
-            {
-                var existence = GetExistence(item);
-            }
-        }
-
-        private PathExistence GetExistence(HierarchicalNameId item)
-        {
-            if (_existenceBuffer.Capacity >= item.Index)
-            {
-
-            }
             throw new NotImplementedException();
         }
 
         internal async Task<PlaceFileResult> TryPlaceFileAsync(
             OperationContext context,
-            AbsPath path,
+            FullPath path,
             ContentHash contentHash,
             FileAccessMode accessMode,
             FileReplacementMode replacementMode,
@@ -118,7 +82,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
                 return result;
             }
 
-            if (eagerlyPlaceLocallyAvailableFiles)
+            if (eagerlyPlaceLocallyAvailableFiles && LocalOnlySession != null)
             {
                 result = await LocalOnlySession.PlaceLocalFileAsync(
                     context,
@@ -136,7 +100,20 @@ namespace BuildXL.Cache.ContentStore.Vfs
                 }
             }
 
-            return PlaceVirtualFile(virtualPath, accessMode, realizationMode);
+            _tree.AddFileNode(virtualPath, DateTime.UtcNow, contentHash, realizationMode, accessMode);
+            return new PlaceFileResult(GetPlaceResultCode(realizationMode, accessMode));
+        }
+
+        private PlaceFileResult.ResultCode GetPlaceResultCode(FileRealizationMode realizationMode, FileAccessMode accessMode)
+        {
+            if (realizationMode == FileRealizationMode.Copy
+                || realizationMode == FileRealizationMode.CopyNoVerify
+                || accessMode == FileAccessMode.Write)
+            {
+                return PlaceFileResult.ResultCode.PlacedWithCopy;
+            }
+
+            return PlaceFileResult.ResultCode.PlacedWithHardLink;
         }
 
         internal PlaceFileResult CanPlaceFile(
@@ -146,13 +123,21 @@ namespace BuildXL.Cache.ContentStore.Vfs
             throw new NotImplementedException();
         }
 
-        internal PlaceFileResult PlaceVirtualFile(
-            VirtualPath virtualPath,
-            FileAccessMode accessMode,
-            FileRealizationMode realizationMode)
+        internal async Task PlaceVirtualFileAsync(VirtualPath relativePath, VfsFileNode node)
         {
-            MarkFileExistence(virtualPath);
-            throw new NotImplementedException();
+            var tempFilePath = _tempDirectory.CreateRandomFileName();
+            var result = await FullSession.PlaceFileAsync(
+                Placeholder.Todo<Context>("Should we capture the context id of the original place file?"),
+                node.Hash,
+                tempFilePath,
+                node.AccessMode,
+                FileReplacementMode.ReplaceExisting,
+                node.RealizationMode,
+                Placeholder.Todo<CancellationToken>("How to cancel?")).ThrowIfFailure();
+
+            var fullPath = ToFullPath(relativePath);
+
+            _fileSystem.MoveFile(tempFilePath, fullPath, true);
         }
 
         internal bool TryCreateHardlink(VirtualPath virtualPath)
@@ -160,7 +145,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
 
         }
 
-        internal bool TryGetVirtualFile(string relativePath, out VirtualFileBase virtualFile)
+        internal bool TryGetVirtualFile(string relativePath, out VirtualFile virtualFile)
         {
 
         }
@@ -170,7 +155,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
 
         }
 
-        internal VirtualFileBase TryGetVirtualFile()
+        internal VirtualFile TryGetVirtualFile()
         {
             throw new NotImplementedException();
         }
@@ -185,12 +170,6 @@ namespace BuildXL.Cache.ContentStore.Vfs
 
             throw new NotImplementedException();
         }
-
-        public class VirtualFile
-        {
-            public VirtualizationRegistry Overlay;
-            public ContentInfo ContentInfo;
-        }
     }
 
     public abstract class VirtualItem
@@ -199,7 +178,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
         public abstract IEnumerable<VirtualPath> Children { get; }
     }
 
-    public abstract class VirtualFileBase
+    public abstract class VirtualFile
     {
         public ContentInfo Info;
         public IContentSession Session;
