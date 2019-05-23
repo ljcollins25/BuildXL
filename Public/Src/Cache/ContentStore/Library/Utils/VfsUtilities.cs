@@ -19,7 +19,7 @@ namespace BuildXL.Cache.ContentStore.Utils
             throw new NotImplementedException();
         }
 
-        public static AbsolutePath CreateCasRelativePath(ContentHash hash, int nodeIndex)
+        public static string CreateCasRelativePath(ContentHash hash, int nodeIndex)
         {
             throw new NotImplementedException();
         }

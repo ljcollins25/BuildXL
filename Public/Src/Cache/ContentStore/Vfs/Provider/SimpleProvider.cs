@@ -14,9 +14,12 @@ using System.Threading.Tasks;
 using BuildXL.Utilities.Collections;
 using BuildXL.Cache.ContentStore.Utils;
 using BuildXL.Cache.ContentStore.Hashing;
+using BuildXL.Native.IO;
+using System.Diagnostics.ContractsLight;
 
 namespace BuildXL.Cache.ContentStore.Vfs.Managed
 {
+    using AbsolutePath = Interfaces.FileSystem.AbsolutePath;
     using VirtualPath = Utilities.AbsolutePath;
     using Utils = Microsoft.Windows.ProjFS.Utils;
 
@@ -24,77 +27,37 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
     /// This is a simple file system "reflector" provider.  It projects files and directories from
     /// a directory called the "layer root" into the virtualization root, also called the "scratch root".
     /// </summary>
-    public class SimpleProvider
+    public class VfsProvider
     {
         private Logger Log;
         private VirtualizationRegistry Registry;
         private VfsTree Tree;
 
         private string _casRelativePrefix;
+        private VfsCasConfiguration _configuration;
 
         // These variables hold the layer and scratch paths.
-        private readonly string scratchRoot;
-        private readonly string layerRoot;
         private readonly int currentProcessId = Process.GetCurrentProcess().Id;
 
         private readonly VirtualizationInstance virtualizationInstance;
 
         // TODO: Cache enumeration listings
         private readonly ObjectCache<string, List<VfsNode>> enumerationCache;
-        private readonly ConcurrentDictionary<Guid, ActiveEnumeration> activeEnumerations;
+        private readonly ConcurrentDictionary<Guid, ActiveEnumeration> activeEnumerations = new ConcurrentDictionary<Guid, ActiveEnumeration>();
         private readonly ConcurrentDictionary<int, CancellationTokenSource> activeCommands = new ConcurrentDictionary<int, CancellationTokenSource>();
-        private readonly ConcurrentDictionary<string, Lazy<HResult>> pendingHardlinkCreations = new ConcurrentDictionary<string, Lazy<HResult>>(
-            StringComparer.OrdinalIgnoreCase);
 
         private NotificationCallbacks notificationCallbacks;
 
-        public ProviderOptions Options { get; }
-
-        public SimpleProvider(ProviderOptions options)
+        public VfsProvider(VfsCasConfiguration configuration)
         {
-            scratchRoot = options.VirtRoot;
-            layerRoot = options.SourceRoot;
-
-            Options = options;
-
-            // If in test mode, enable notification callbacks.
-            if (Options.TestMode)
-            {
-                Options.EnableNotifications = true;
-            }
-
             // Enable notifications if the user requested them.
-            List<NotificationMapping> notificationMappings;
-            if (Options.EnableNotifications)
-            {
-                notificationMappings = new List<NotificationMapping>()
-                {
-                    new NotificationMapping(
-                        NotificationType.FileOpened
-                        | NotificationType.NewFileCreated
-                        | NotificationType.FileOverwritten
-                        | NotificationType.PreDelete
-                        | NotificationType.PreRename
-                        | NotificationType.PreCreateHardlink
-                        | NotificationType.FileRenamed
-                        | NotificationType.HardlinkCreated
-                        | NotificationType.FileHandleClosedNoModification
-                        | NotificationType.FileHandleClosedFileModified
-                        | NotificationType.FileHandleClosedFileDeleted
-                        | NotificationType.FilePreConvertToFull,
-                        string.Empty)
-                };
-            }
-            else
-            {
-                notificationMappings = new List<NotificationMapping>();
-            }
+            var notificationMappings = new List<NotificationMapping>();
 
             try
             {
                 // This will create the virtualization root directory if it doesn't already exist.
                 virtualizationInstance = new VirtualizationInstance(
-                    scratchRoot,
+                    configuration.VfsRootPath.Path,
                     poolThreadCount: 0,
                     concurrentThreadCount: 0,
                     enableNegativePathCache: false,
@@ -111,15 +74,6 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                 this,
                 virtualizationInstance,
                 notificationMappings);
-
-            Log.Info("Created instance. Layer [{Layer}], Scratch [{Scratch}]", layerRoot, scratchRoot);
-
-            if (Options.TestMode)
-            {
-                Log.Info("Provider started in TEST MODE.");
-            }
-
-            activeEnumerations = new ConcurrentDictionary<Guid, ActiveEnumeration>();
         }
 
         public bool StartVirtualization()
@@ -136,6 +90,11 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             }
 
             return true;
+        }
+
+        private HResult IgnoreReentrantFileOperations(string relativePath, Func<HResult> action)
+        {
+            throw new NotImplementedException();
         }
 
         private HResult HandleCommandAsynchronously(int commandId, Func<CancellationToken, Task<HResult>> handleAsync)
@@ -198,42 +157,6 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             }
 
             return Enumerable.Empty<VfsNode>();
-        }
-
-        protected async Task<HResult> HydrateFileAsync(VirtualFile virtualFile, uint bufferSize, Func<byte[], uint, bool> tryWriteBytes)
-        {
-            var openStreamResult = await virtualFile.TryOpenStreamAsync();
-            if (!openStreamResult.Succeeded)
-            {
-                return HResult.InternalError;
-            }
-
-            // Open the file in the layer for read.
-            using (var fs = openStreamResult.Stream)
-            {
-                long remainingDataLength = fs.Length;
-                byte[] buffer = new byte[bufferSize];
-
-                while (remainingDataLength > 0)
-                {
-                    // Read from the file into the read buffer.
-                    int bytesToCopy = (int)Math.Min(remainingDataLength, buffer.Length);
-                    if (fs.Read(buffer, 0, bytesToCopy) != bytesToCopy)
-                    {
-                        return HResult.InternalError;
-                    }
-
-                    // Write the bytes we just read into the scratch.
-                    if (!tryWriteBytes(buffer, (uint)bytesToCopy))
-                    {
-                        return HResult.InternalError;
-                    }
-
-                    remainingDataLength -= bytesToCopy;
-                }
-            }
-
-            return HResult.Ok;
         }
 
         #region Callback implementations
@@ -362,6 +285,13 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             Log.Info("----> GetPlaceholderInfoCallback [{Path}]", relativePath);
             Log.Info("  Placeholder creation triggered by [{ProcName} {PID}]", triggeringProcessImageFileName, triggeringProcessId);
 
+            if (triggeringProcessId == currentProcessId)
+            {
+                // The current process cannot trigger placeholder creation to prevent deadlock do to re-entrancy
+                // Just pretend the file doesn't exist.
+                return HResult.FileNotFound;
+            }
+
             // TODO: Prevent recursion for creation of placeholder for CAS relative path and potentially when replacing symlink at real location
 
             if (relativePath.StartsWith(_casRelativePrefix, StringComparison.OrdinalIgnoreCase))
@@ -408,12 +338,16 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                     isDirectory: node.IsDirectory,
                     contentId: new byte[] { 0 },
                     providerId: new byte[] { 1 });
-
-                // TODO: Set ACLs on placeholder file
             }
             else
             {
-                // TODO: Create symlink to CAS relative path
+                hr = IgnoreReentrantFileOperations(relativePath, () =>
+                {
+                    var fileNode = (VfsFileNode)node;
+                    var result = Registry.TryCreateSymlink(nodeIndex, fileNode);
+
+                    return result ? HResult.Ok : HResult.InternalError;
+                });
             }
 
             Log.Info("<---- GetPlaceholderInfoCallback {Result}", hr);
@@ -434,55 +368,8 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             Log.Info("----> GetFileDataCallback relativePath [{Path}]", relativePath);
             Log.Info("  triggered by [{ProcName} {PID}]", triggeringProcessImageFileName, triggeringProcessId);
 
-            HResult hr = HResult.Ok;
-            if (!Registry.TryGetVirtualFile(relativePath, out var virtualFile))
-            {
-                return HResult.FileNotFound;
-            }
-
-            return HandleCommandAsynchronously(commandId, token =>
-            {
-                // We'll write the file contents to ProjFS no more than 64KB at a time.
-                uint desiredBufferSize = Math.Min(64 * 1024, length);
-                // We could have used VirtualizationInstance.CreateWriteBuffer(uint), but this 
-                // illustrates how to use its more complex overload.  This method gets us a 
-                // buffer whose underlying storage is properly aligned for unbuffered I/O.
-                using (IWriteBuffer writeBuffer = virtualizationInstance.CreateWriteBuffer(
-                    byteOffset,
-                    desiredBufferSize,
-                    out ulong alignedWriteOffset,
-                    out uint alignedBufferSize))
-                {
-                    // Get the file data out of the layer and write it into ProjFS.
-                    return HydrateFileAsync(
-                        virtualFile,
-                        alignedBufferSize,
-                        (readBuffer, bytesToCopy) =>
-                        {
-                            // readBuffer contains what HydrateFile() read from the file in the
-                            // layer.  Now seek to the beginning of the writeBuffer and copy the
-                            // contents of readBuffer into writeBuffer.
-                            writeBuffer.Stream.Seek(0, SeekOrigin.Begin);
-                            writeBuffer.Stream.Write(readBuffer, 0, (int)bytesToCopy);
-
-                            // Write the data from the writeBuffer into the scratch via ProjFS.
-                            HResult writeResult = virtualizationInstance.WriteFileData(
-                                dataStreamId,
-                                writeBuffer,
-                                alignedWriteOffset,
-                                bytesToCopy);
-
-                            if (writeResult != HResult.Ok)
-                            {
-                                Log.Error("VirtualizationInstance.WriteFileData failed: {Result}", writeResult);
-                                return false;
-                            }
-
-                            alignedWriteOffset += bytesToCopy;
-                            return true;
-                        });
-                }
-            });
+            // We should never create file placeholders so this should not be necessary
+            return HResult.FileNotFound;
         }
 
         private HResult QueryFileNameCallback(string relativePath)
@@ -512,7 +399,7 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                     return HResult.Ok;
                 }
             }
-            
+
             return HResult.FileNotFound;
         }
 
@@ -521,9 +408,9 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
 
         private class RequiredCallbacks : IRequiredCallbacks
         {
-            private readonly SimpleProvider provider;
+            private readonly VfsProvider provider;
 
-            public RequiredCallbacks(SimpleProvider provider) => this.provider = provider;
+            public RequiredCallbacks(VfsProvider provider) => this.provider = provider;
 
             // We implement the callbacks in the SimpleProvider class.
 

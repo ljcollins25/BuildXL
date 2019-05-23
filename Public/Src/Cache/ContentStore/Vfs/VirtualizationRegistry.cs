@@ -40,6 +40,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
         // TODO: Allow switching between hydration on CreatePlaceholder and GetFileData
 
         private readonly VfsTree _tree;
+        private VfsCasConfiguration _configuration;
 
         private IContentSession FullSession;
         private ILocalFileSystemContentSession LocalOnlySession;
@@ -121,6 +122,23 @@ namespace BuildXL.Cache.ContentStore.Vfs
             FileReplacementMode replacementMode)
         {
             throw new NotImplementedException();
+        }
+
+        public bool TryCreateSymlink(int nodeIndex, VfsFileNode fileNode)
+        {
+            var casRelativePath = VfsUtilities.CreateCasRelativePath(fileNode.Hash, nodeIndex);
+            var fullSourcePath = _configuration.VfsRootPath / casRelativePath;
+            var fullTargetPath = _configuration.VfsCasRootPath / casRelativePath;
+            var result = FileUtilities.TryCreateSymbolicLink(symLinkFileName: fullSourcePath.Path, targetFileName: fullTargetPath.Path, isTargetFile: true);
+            if (result.Succeeded)
+            {
+                return true;
+            }
+            else
+            {
+                // TODO: Log
+                return false;
+            }
         }
 
         internal async Task PlaceVirtualFileAsync(VirtualPath relativePath, VfsFileNode node, CancellationToken token)

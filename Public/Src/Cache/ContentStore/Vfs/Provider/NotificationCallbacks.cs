@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
 using Microsoft.Windows.ProjFS;
@@ -9,10 +9,10 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
 {
     class NotificationCallbacks
     {
-        private readonly SimpleProvider provider;
+        private readonly VfsProvider provider;
 
         public NotificationCallbacks(
-            SimpleProvider provider,
+            VfsProvider provider,
             VirtualizationInstance virtInstance,
             IReadOnlyCollection<NotificationMapping> notificationMappings)
         {
