@@ -12,6 +12,8 @@ using System.Diagnostics;
 using BuildXL.Cache.ContentStore.Logging;
 using System.Threading.Tasks;
 using BuildXL.Utilities.Collections;
+using BuildXL.Cache.ContentStore.Utils;
+using BuildXL.Cache.ContentStore.Hashing;
 
 namespace BuildXL.Cache.ContentStore.Vfs.Managed
 {
@@ -27,6 +29,8 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
         private Logger Log;
         private VirtualizationRegistry Registry;
         private VfsTree Tree;
+
+        private string _casRelativePrefix;
 
         // These variables hold the layer and scratch paths.
         private readonly string scratchRoot;
@@ -358,6 +362,28 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             Log.Info("----> GetPlaceholderInfoCallback [{Path}]", relativePath);
             Log.Info("  Placeholder creation triggered by [{ProcName} {PID}]", triggeringProcessImageFileName, triggeringProcessId);
 
+            // TODO: Prevent recursion for creation of placeholder for CAS relative path and potentially when replacing symlink at real location
+
+            if (relativePath.StartsWith(_casRelativePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var casRelativePath = relativePath.Substring(_casRelativePrefix.Length);
+                if (VfsUtilities.TryParseCasRelativePath(casRelativePath, out var hash, out var index)
+                    && Tree.TryGetSpecificFileNode(hash, index, out var fileNode))
+                {
+                    return HandleCommandAsynchronously(commandId, async token =>
+                    {
+                        await Registry.PlaceVirtualFileAsync(relativePath, fileNode, token);
+
+                        // TODO: Create hardlink / move to original location to replace symlink?
+                        return HResult.Ok;
+                    });
+                }
+                else
+                {
+                    return HResult.FileNotFound;
+                }
+            }
+
             // FileRealizationMode.Copy = just create a normal placeholder
 
             // FileRealizationMode.Hardlink:
@@ -365,11 +391,11 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             // 2. Create hardlink in VFS unified CAS
 
             HResult hr = HResult.Ok;
-            if (!Tree.TryGetNode(relativePath, out var node))
+            if (!Tree.TryGetNode(relativePath, out var node, out var nodeIndex))
             {
                 hr = HResult.FileNotFound;
             }
-            else
+            else if (node.IsDirectory)
             {
                 hr = virtualizationInstance.WritePlaceholderInfo(
                     relativePath: relativePath.EndsWith(node.Name) ? relativePath : Path.Combine(Path.GetDirectoryName(relativePath), node.Name),
@@ -384,6 +410,10 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                     providerId: new byte[] { 1 });
 
                 // TODO: Set ACLs on placeholder file
+            }
+            else
+            {
+                // TODO: Create symlink to CAS relative path
             }
 
             Log.Info("<---- GetPlaceholderInfoCallback {Result}", hr);

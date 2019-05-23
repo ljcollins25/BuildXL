@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using BuildXL.Cache.ContentStore.FileSystem;
 using BuildXL.Cache.ContentStore.Hashing;
 using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 using BuildXL.Cache.ContentStore.Interfaces.Results;
@@ -30,6 +31,9 @@ namespace BuildXL.Cache.ContentStore.Vfs
         private IContentSession InnerSession { get; }
         private VirtualizedContentStore Store { get; }
         protected override Tracer Tracer { get; } = new Tracer(nameof(VirtualizedContentSession));
+
+        private PassThroughFileSystem FileSystem;
+        private VfsTree VfsTree;
 
         public VirtualizedContentSession(VirtualizedContentStore store, IContentSession session, string name)
             : base(name)
@@ -76,28 +80,44 @@ namespace BuildXL.Cache.ContentStore.Vfs
         {
             var virtualPath = Store.Overlay.ToVirtualPath(path);
 
-            if (!Store.Overlay.TryPlaceFile(
-                    virtualPath, 
-                    contentHash, 
-                    realizationMode, 
-                    accessMode, 
-                    overwrite: replacementMode == FileReplacementMode.ReplaceExisting, 
-                    errorResult: out var errorResult))
+            if (replacementMode != FileReplacementMode.ReplaceExisting && FileSystem.FileExists(path))
             {
-                if (errorResult != null)
+                if (replacementMode == FileReplacementMode.SkipIfExists)
                 {
-                    return new PlaceFileResult(errorResult);
+                    return new PlaceFileResult(PlaceFileResult.ResultCode.NotPlacedAlreadyExists);
                 }
                 else if (replacementMode == FileReplacementMode.FailIfExists)
                 {
-                    return Placeholder.Todo<PlaceFileResult>("Cannot overwrite place result");
-                }
-                else
-                {
-                    Contract.Assert(replacementMode == FileReplacementMode.SkipIfExists);
-                    return Placeholder.Todo<PlaceFileResult>("Skipped place result");
+                    return new PlaceFileResult(
+                        PlaceFileResult.ResultCode.Error,
+                        $"File exists at destination {path} with FailIfExists specified");
                 }
             }
+
+            VfsTree.AddFileNode(virtualPath, DateTime.UtcNow, contentHash, realizationMode, accessMode);
+
+            //if (!Store.Overlay.TryPlaceFile(
+            //        virtualPath, 
+            //        contentHash, 
+            //        realizationMode, 
+            //        accessMode, 
+            //        overwrite: replacementMode == FileReplacementMode.ReplaceExisting, 
+            //        errorResult: out var errorResult))
+            //{
+            //    if (errorResult != null)
+            //    {
+            //        return new PlaceFileResult(errorResult);
+            //    }
+            //    else if (replacementMode == FileReplacementMode.FailIfExists)
+            //    {
+            //        return Placeholder.Todo<PlaceFileResult>("Cannot overwrite place result");
+            //    }
+            //    else
+            //    {
+            //        Contract.Assert(replacementMode == FileReplacementMode.SkipIfExists);
+            //        return Placeholder.Todo<PlaceFileResult>("Skipped place result");
+            //    }
+            //}
 
             return new PlaceFileResult(GetResultCode(realizationMode, accessMode), fileSize: -1 /* Unknown */);
         }

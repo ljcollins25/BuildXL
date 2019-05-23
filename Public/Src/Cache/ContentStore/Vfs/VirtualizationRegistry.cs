@@ -123,7 +123,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
             throw new NotImplementedException();
         }
 
-        internal async Task PlaceVirtualFileAsync(VirtualPath relativePath, VfsFileNode node)
+        internal async Task PlaceVirtualFileAsync(VirtualPath relativePath, VfsFileNode node, CancellationToken token)
         {
             var tempFilePath = _tempDirectory.CreateRandomFileName();
             var result = await FullSession.PlaceFileAsync(
@@ -133,73 +133,11 @@ namespace BuildXL.Cache.ContentStore.Vfs
                 node.AccessMode,
                 FileReplacementMode.ReplaceExisting,
                 node.RealizationMode,
-                Placeholder.Todo<CancellationToken>("How to cancel?")).ThrowIfFailure();
+                token).ThrowIfFailure();
 
             var fullPath = ToFullPath(relativePath);
 
             _fileSystem.MoveFile(tempFilePath, fullPath, true);
         }
-
-        internal bool TryCreateHardlink(VirtualPath virtualPath)
-        {
-
-        }
-
-        internal bool TryGetVirtualFile(string relativePath, out VirtualFile virtualFile)
-        {
-
-        }
-
-        internal bool TryGetVirtualItem(string relativePath, out VirtualItem virtualFile)
-        {
-
-        }
-
-        internal VirtualFile TryGetVirtualFile()
-        {
-            throw new NotImplementedException();
-        }
-
-        internal Task<OpenStreamResult> OpenFileAsync(VirtualPath virtualPath)
-        {
-            // 1. Get content hash for path
-            // 1a. If content not registered return content not found
-            // 1b. Else call open stream
-
-            var hash = Placeholder.Todo<ContentHash>("Get content hash at path");
-
-            throw new NotImplementedException();
-        }
     }
-
-    public abstract class VirtualItem
-    {
-        public abstract bool IsDirectory { get; }
-        public abstract IEnumerable<VirtualPath> Children { get; }
-    }
-
-    public abstract class VirtualFile
-    {
-        public ContentInfo Info;
-        public IContentSession Session;
-
-        public Task<bool> TryCreateHardlinkAsync()
-        {
-            // Don't allow hardlink creation if file has realization mode which is not hardlink
-            // Call PlaceFileAsync2
-        }
-
-        public Task<OpenStreamResult> TryOpenStreamAsync()
-        {
-
-        }
-    }
-
-    public class ContentInfo
-    {
-        public readonly ContentHash Hash;
-        public readonly FileRealizationMode RealizationMode;
-        public readonly FileAccessMode AccessMode;
-    }
-
 }

@@ -44,9 +44,23 @@ namespace BuildXL.Cache.ContentStore.Vfs
             _nodeMap[string.Empty] = Root;
         }
 
+        public bool TryGetSpecificFileNode(ContentHash hash, int index, out VfsFileNode node)
+        {
+            node = _nodeMap.BackingSet[index].Value as VfsFileNode;
+            return node != null && node.Hash == hash;
+        }
+
         public bool TryGetNode(string relativePath, out VfsNode node)
         {
             return _nodeMap.TryGetValue(relativePath, out node);
+        }
+
+        public bool TryGetNode(string relativePath, out VfsNode node, out int nodeIndex)
+        {
+            var result = _nodeMap.TryGet(relativePath);
+            node = result.Item.Value;
+            nodeIndex = result.Index;
+            return result.IsFound;
         }
 
         public VfsFileNode AddFileNode(string relativePath, DateTime timestamp, ContentHash hash, FileRealizationMode realizationMode, FileAccessMode accessMode)
