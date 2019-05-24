@@ -99,6 +99,9 @@ namespace BuildXL.Engine
 
         internal const int PipTableInitialBufferSize = 16384;
 
+        /// <summary>
+        /// Config file state
+        /// </summary>
         public readonly ConfigFileState ConfigFileState;
 
         private readonly FileContentTable m_fileContentTable;
