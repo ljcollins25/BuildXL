@@ -1058,6 +1058,13 @@ namespace BuildXL.Engine
                     }
                 }
 
+                if (mutableConfig.Logging.CacheMissAnalysisOption.Mode == CacheMissMode.Local)
+                {
+                    // BuildXL should not use local fingerprintstore for cache miss analysis.
+                    // Because you do not know how old is that fingerprintstore, the data is not really useful.
+                    mutableConfig.Logging.CacheMissAnalysisOption.Mode = CacheMissMode.Disabled;
+                }
+
                 mutableConfig.Logging.StoreFingerprints = initialCommandLineConfiguration.Logging.StoreFingerprints ?? false;
             }
             else
@@ -2989,6 +2996,16 @@ namespace BuildXL.Engine
             Logger.Log.ObjectCacheStats(loggingContext, "SymbolTable Expansion Cache", symbolTable.CacheHits, symbolTable.CacheMisses);
             Logger.Log.ObjectCacheStats(loggingContext, "StringTable Expansion Cache", stringTable.CacheHits, stringTable.CacheMisses);
             Logger.Log.ObjectCacheStats(loggingContext, "TokenTextTable Expansion Cache", tokenTextTable.CacheHits, tokenTextTable.CacheMisses);
+
+            Dictionary<string, long> tableSizeStats = new Dictionary<string, long>()
+            {
+                {"PathTableBytes", pathTable.SizeInBytes },
+                {"SymbolTableBytes", symbolTable.SizeInBytes },
+                {"StringTableBytes", stringTable.SizeInBytes },
+                {"TokenTextTableBytes", tokenTextTable.SizeInBytes },
+            };
+
+            BuildXL.Tracing.Logger.Log.BulkStatistic(loggingContext, tableSizeStats);
 
             // ReSharper disable once ReturnValueOfPureMethodIsNotUsed
             cacheInitializationTask?.GetAwaiter().GetResult().Then(

@@ -33,7 +33,7 @@ namespace NugetPackages {
         id: `${packageNamePrefix}.win-x64`,
         deployment: BuildXL.withQualifier({
             configuration: qualifier.configuration,
-            targetFramework: "netcoreapp2.2",
+            targetFramework: "netcoreapp3.0",
             targetRuntime: "win-x64"
         }).deployment,
     });
@@ -42,7 +42,7 @@ namespace NugetPackages {
         id: `${packageNamePrefix}.osx-x64`,
         deployment: BuildXL.withQualifier({
             configuration: qualifier.configuration,
-            targetFramework: "netcoreapp2.2",
+            targetFramework: "netcoreapp3.0",
             targetRuntime: "osx-x64"
         }).deployment,
     });
@@ -68,7 +68,13 @@ namespace NugetPackages {
             importFrom("Grpc.Core").withQualifier({ targetFramework: "net461" }).pkg,
             importFrom("Google.Protobuf").withQualifier({ targetFramework: "net461" }).pkg,
             importFrom("StackExchange.Redis.StrongName").withQualifier({ targetFramework: "net461" }).pkg,
-            importFrom("Microsoft.VisualStudio.Services.ArtifactServices.Shared").withQualifier({ targetFramework: "net461" }).pkg,
+
+            ...BuildXLSdk.withQualifier({
+                targetFramework: "net461",
+                targetRuntime: "win-x64",
+                configuration: qualifier.configuration
+            }).visualStudioServicesArtifactServicesSharedPkg,
+
             importFrom("Microsoft.VisualStudio.Services.BlobStore.Client").withQualifier({ targetFramework: "net461" }).pkg,
         ]
     });
@@ -93,7 +99,7 @@ namespace NugetPackages {
         id: `${packageNamePrefix}.Tools.SandboxExec.osx-x64`,
         deployment: Tools.SandboxExec.withQualifier({
             configuration: qualifier.configuration,
-            targetFramework: "netcoreapp2.2",
+            targetFramework: "netcoreapp3.0",
             targetRuntime: "osx-x64"
         }).deployment
     });
@@ -103,7 +109,7 @@ namespace NugetPackages {
         id: `${packageNamePrefix}.Tools.Orchestrator.osx-x64`,
         deployment: Tools.Orchestrator.withQualifier({
             configuration: qualifier.configuration,
-            targetFramework: "netcoreapp2.2",
+            targetFramework: "netcoreapp3.0",
             targetRuntime: "osx-x64"
         }).deployment
     });
@@ -122,9 +128,8 @@ namespace NugetPackages {
                 cacheHashing,
             ]),
             sdks,
-            osxX64,
+            ...addIf(!BuildXLSdk.Flags.genVSSolution, osxX64, toolsOrchestrator),
             toolsSandBoxExec,
-            toolsOrchestrator,
         ]
     };
 
