@@ -228,10 +228,10 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(Process process)
         {
             var builder = GetPathAccessLockBuilder();
-            builder.AddAccesses(process.FileOutputs, AccessType.Write);
-            builder.AddAccesses(process.DirectoryOutputs, AccessType.Write);
-            builder.AddAccesses(process.Dependencies, AccessType.Read);
-            builder.AddAccesses(process.DirectoryDependencies, AccessType.Read);
+            // // builder.AddAccesses(process.FileOutputs, AccessType.Write);
+            // // builder.AddAccesses(process.DirectoryOutputs, AccessType.Write);
+            // // builder.AddAccesses(process.Dependencies, AccessType.Read);
+            // // builder.AddAccesses(process.DirectoryDependencies, AccessType.Read);
             return builder.Acquire();
         }
 
@@ -241,9 +241,9 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(IpcPip ipcPip)
         {
             var builder = GetPathAccessLockBuilder();
-            builder.AddAccesses(ipcPip.FileDependencies, AccessType.Read);
-            builder.AddAccesses(ipcPip.DirectoryDependencies, AccessType.Read);
-            builder.AddAccess(ipcPip.OutputFile, AccessType.Write);
+            // // builder.AddAccesses(ipcPip.FileDependencies, AccessType.Read);
+            // // builder.AddAccesses(ipcPip.DirectoryDependencies, AccessType.Read);
+            // builder.AddAccess(ipcPip.OutputFile, AccessType.Write);
             return builder.Acquire();
         }
 
@@ -253,7 +253,7 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(WriteFile writeFile)
         {
             var builder = GetPathAccessLockBuilder();
-            builder.AddAccess(writeFile.Destination, AccessType.Write);
+            // builder.AddAccess(writeFile.Destination, AccessType.Write);
             return builder.Acquire();
         }
 
@@ -263,8 +263,8 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(CopyFile copyFile)
         {
             var builder = GetPathAccessLockBuilder();
-            builder.AddAccess(copyFile.Destination, AccessType.Write);
-            builder.AddAccess(copyFile.Source, AccessType.Read);
+            // builder.AddAccess(copyFile.Destination, AccessType.Write);
+            // builder.AddAccess(copyFile.Source, AccessType.Read);
             return builder.Acquire();
         }
 
@@ -274,8 +274,8 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(SealDirectory sealDirectory)
         {
             var builder = GetPathAccessLockBuilder();
-            builder.AddAccess(sealDirectory.DirectoryRoot, AccessType.Read);
-            builder.AddAccesses(sealDirectory.Contents, AccessType.Read);
+            // builder.AddAccess(sealDirectory.DirectoryRoot, AccessType.Read);
+            // // builder.AddAccesses(sealDirectory.Contents, AccessType.Read);
             return builder.Acquire();
         }
 
@@ -642,7 +642,7 @@ namespace BuildXL.Scheduler.Graph
             public bool HasReadAccess(AbsolutePath path)
             {
                 // NOTE: We don't check the access type since write access also includes read access
-                return m_pathAccessMap.ContainsKey(path);
+                return true; // m_pathAccessMap.ContainsKey(path);
             }
 
             /// <summary>
@@ -653,13 +653,15 @@ namespace BuildXL.Scheduler.Graph
             [Pure]
             public bool HasWriteAccess(AbsolutePath path)
             {
+                return true;
+                /*
                 AccessType accessType;
                 if (m_pathAccessMap.TryGetValue(path, out accessType))
                 {
                     return accessType == AccessType.Write;
                 }
 
-                return false;
+                return false;*/
             }
 
             /// <summary>
@@ -669,8 +671,8 @@ namespace BuildXL.Scheduler.Graph
             /// </summary>
             public ExclusiveSinglePathLock AcquirePathInnerExclusiveLock(AbsolutePath path)
             {
-                Contract.Assert(m_pathAccessMap.ContainsKey(path), "Cannot acquire exclusive lock for path not in group");
-                Contract.Assert(!m_hasOutstandingExclusiveLock, "Cannot acquire more that on exclusive inner lock for a path group");
+                // Contract.Assert(m_pathAccessMap.ContainsKey(path), "Cannot acquire exclusive lock for path not in group");
+                // Contract.Assert(!m_hasOutstandingExclusiveLock, "Cannot acquire more that on exclusive inner lock for a path group");
                 m_hasOutstandingExclusiveLock = true;
                 return new ExclusiveSinglePathLock(m_owner, this, path, m_owner.m_accessVerifier);
             }
