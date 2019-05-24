@@ -53,20 +53,33 @@ namespace BuildXL.Engine
         public readonly PipGraph PipGraph;
 
         /// <summary>
+        /// The config file state
+        /// </summary>
+        public readonly ConfigFileState ConfigFileState;
+
+        /// <summary>
+        /// CorrelationId
+        /// </summary>
+        public string CorrelationId;
+
+        /// <summary>
         /// Class constructor
         /// </summary>
-        public CachedGraph(PipGraph pipGraph, DirectedGraph dataflowGraph, PipExecutionContext context, MountPathExpander mountPathExpander)
+        public CachedGraph(PipGraph pipGraph, DirectedGraph dataflowGraph, PipExecutionContext context, MountPathExpander mountPathExpander, ConfigFileState configFileState, string correlationId = null)
         {
             Contract.Requires(pipGraph != null);
             Contract.Requires(dataflowGraph != null);
             Contract.Requires(context != null);
             Contract.Requires(mountPathExpander != null);
+            Contract.Requires(configFileState != null);
 
             DataflowGraph = dataflowGraph;
             PipTable = pipGraph.PipTable;
             MountPathExpander = mountPathExpander;
             Context = context;
             PipGraph = pipGraph;
+            ConfigFileState = configFileState;
+            CorrelationId = correlationId;
         }
 
         /// <summary>
@@ -112,6 +125,7 @@ namespace BuildXL.Engine
         private readonly Lazy<Task<PipExecutionContext>> m_pipExecutionContextTask;
         private readonly Lazy<Task<HistoricTableSizes>> m_historicDataTask;
         private readonly Lazy<Task<PipGraph>> m_pipGraphTask;
+        private readonly Lazy<Task<ConfigFileState>> m_configFileStateTask;
 
         /// <summary>
         /// Loads a cache graph from a given cached graph directory
@@ -206,6 +220,11 @@ namespace BuildXL.Engine
                     return null;
                 }));
 
+            m_configFileStateTask = CreateLazyFileDeserialization(
+                serializer,
+                GraphCacheFile.ConfigState,
+                reader => ConfigFileState.DeserializeAsync(reader, m_pipExecutionContextTask.Value));
+
             m_historicDataTask = CreateLazyFileDeserialization(
                 serializer,
                 GraphCacheFile.HistoricTableSizes,
@@ -222,7 +241,7 @@ namespace BuildXL.Engine
                     m_pipExecutionContextTask.Value,
                     ToSemanticPathExpander(m_mountPathExpanderTask.Value)));
 
-            m_cachedGraphTask = CreateAsyncLazy(() => CreateCachedGraph(m_pipTableTask.Value, m_pipGraphTask.Value, directedGraphTask.Value, m_pipExecutionContextTask.Value, m_mountPathExpanderTask.Value));
+            m_cachedGraphTask = CreateAsyncLazy(() => CreateCachedGraph(m_pipTableTask.Value, m_pipGraphTask.Value, directedGraphTask.Value, m_pipExecutionContextTask.Value, m_mountPathExpanderTask.Value, m_configFileStateTask.Value, serializer));
         }
 
         private CachedGraphLoader(CancellationToken cancellationToken, EngineState engineState)
@@ -237,19 +256,24 @@ namespace BuildXL.Engine
             m_pipExecutionContextTask = CreateAsyncLazyFromResult((PipExecutionContext)new SchedulerContext(cancellationToken, engineState.StringTable, engineState.PathTable, engineState.SymbolTable, engineState.QualifierTable));
             m_historicDataTask = CreateAsyncLazyFromResult(engineState.HistoricTableSizes);
             m_pipGraphTask = CreateAsyncLazyFromResult(pipGraph);
-            m_cachedGraphTask = CreateAsyncLazyFromResult(new CachedGraph(pipGraph, pipGraph.DataflowGraph, m_pipExecutionContextTask.Value.Result, engineState.MountPathExpander));
+            m_configFileStateTask = CreateAsyncLazyFromResult(engineState.ConfigFileState);
+            m_cachedGraphTask = CreateAsyncLazyFromResult(new CachedGraph(pipGraph, pipGraph.DataflowGraph, m_pipExecutionContextTask.Value.Result, engineState.MountPathExpander, engineState.ConfigFileState));
         }
 
-        private static async Task<CachedGraph> CreateCachedGraph(Task<PipTable> pipTableTask, Task<PipGraph> pipGraphTask, Task<DeserializedDirectedGraph> directedGraphTask, Task<PipExecutionContext> contextTask, Task<MountPathExpander> mountPathExpanderTask)
+        private static async Task<CachedGraph> CreateCachedGraph(
+            Task<PipTable> pipTableTask, Task<PipGraph> pipGraphTask, Task<DeserializedDirectedGraph> directedGraphTask, Task<PipExecutionContext> contextTask, 
+            Task<MountPathExpander> mountPathExpanderTask, Task<ConfigFileState> configFileStateTask, EngineSerializer serializer = null)
         {
             var pipGraph = await pipGraphTask;
             var directedGraph = await directedGraphTask;
             var context = await contextTask;
             var mountPathExpander = await mountPathExpanderTask;
+            var configFileState = await configFileStateTask;
             if (pipGraph == null ||
                 directedGraph == null ||
                 context == null ||
-                mountPathExpander == null)
+                mountPathExpander == null ||
+                configFileState == null)
             {
                 var pipTable = await pipTableTask;
                 if (pipTable != null)
@@ -260,7 +284,7 @@ namespace BuildXL.Engine
                 return null;
             }
 
-            return new CachedGraph(pipGraph, directedGraph, context, mountPathExpander);
+            return new CachedGraph(pipGraph, directedGraph, context, mountPathExpander, configFileState, serializer.CorrelationId.ToString());
         }
 
         private static async Task<SemanticPathExpander> ToSemanticPathExpander(Task<MountPathExpander> mountPathExpander)

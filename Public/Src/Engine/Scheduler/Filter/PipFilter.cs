@@ -138,7 +138,7 @@ namespace BuildXL.Scheduler.Filter
         /// <summary>
         /// Gets the pips that can have outputs which are direct dependencies of values of the given spec file pips.
         /// </summary>
-        protected static HashSet<PipId> GetDependenciesWithOutputsForModulePips(IPipFilterContext context, IEnumerable<PipId> modulePipIds)
+        public static HashSet<PipId> GetDependenciesWithOutputsForModulePips(IPipFilterContext context, IEnumerable<PipId> modulePipIds, bool includeMetaPips = false)
         {
             HashSet<PipId> specFileDependencies = new HashSet<PipId>();
             foreach (var modulePipId in modulePipIds)
@@ -152,13 +152,19 @@ namespace BuildXL.Scheduler.Filter
                 }
             }
 
-            return GetDependenciesWithOutputsForSpecFilePips(context, specFileDependencies);
+            var moduleDependencies = GetDependenciesWithOutputsForSpecFilePips(context, specFileDependencies, includeMetaPips);
+            if (includeMetaPips)
+            {
+                moduleDependencies.UnionWith(modulePipIds);
+            }
+
+            return moduleDependencies;
         }
 
         /// <summary>
         /// Gets the pips that can have outputs which are direct dependencies of values of the given spec file pips.
         /// </summary>
-        protected static HashSet<PipId> GetDependenciesWithOutputsForSpecFilePips(IPipFilterContext context, IEnumerable<PipId> specFilePipIds)
+        protected static HashSet<PipId> GetDependenciesWithOutputsForSpecFilePips(IPipFilterContext context, IEnumerable<PipId> specFilePipIds, bool includeMetaPips = false)
         {
             HashSet<PipId> valueDependencies = new HashSet<PipId>();
             foreach (var specFilePipId in specFilePipIds)
@@ -172,24 +178,35 @@ namespace BuildXL.Scheduler.Filter
                 }
             }
 
-            return GetDependenciesWithOutputsForValuePips(context, valueDependencies);
+            var specDependencies = GetDependenciesWithOutputsForValuePips(context, valueDependencies, includeMetaPips);
+            if (includeMetaPips)
+            {
+                specDependencies.UnionWith(specFilePipIds);
+            }
+
+            return specDependencies;
         }
 
         /// <summary>
         /// Gets the pips that can have outputs which are direct dependencies of the given value pips.
         /// </summary>
-        protected static HashSet<PipId> GetDependenciesWithOutputsForValuePips(IPipFilterContext context, IEnumerable<PipId> valuePipIds)
+        protected static HashSet<PipId> GetDependenciesWithOutputsForValuePips(IPipFilterContext context, IEnumerable<PipId> valuePipIds, bool includeMetaPips = false)
         {
             HashSet<PipId> dependenciesWithOutputs = new HashSet<PipId>();
             foreach (var valuePipId in valuePipIds)
             {
                 foreach (var dependency in context.GetDependencies(valuePipId))
                 {
-                    if (MayHaveOutputs(context, dependency))
+                    if (includeMetaPips || MayHaveOutputs(context, dependency))
                     {
                         dependenciesWithOutputs.Add(dependency);
                     }
                 }
+            }
+
+            if (includeMetaPips)
+            {
+                dependenciesWithOutputs.UnionWith(valuePipIds);
             }
 
             return dependenciesWithOutputs;

@@ -103,13 +103,16 @@ namespace BuildXL.Pips.Operations
         /// <remarks>
         /// This method should only be used for graph patching and in unit tests.
         /// </remarks>
-        internal void ResetPipIdForTesting()
+        public void ResetPipIdForTesting()
         {
             m_pipId = PipId.Invalid;
         }
 
         #region Serialization
-        internal static Pip Deserialize(PipReader reader)
+        /// <summary>
+        /// Deserialize
+        /// </summary>
+        public static Pip Deserialize(PipReader reader)
         {
             Contract.Requires(reader != null);
             Contract.Ensures(Contract.Result<Pip>() != null);
@@ -163,7 +166,10 @@ namespace BuildXL.Pips.Operations
             return pip;
         }
 
-        internal void Serialize(PipWriter writer)
+        /// <summary>
+        /// Serialize
+        /// </summary>
+        public void Serialize(PipWriter writer)
         {
             Contract.Requires(writer != null);
             writer.Write((byte)PipType);

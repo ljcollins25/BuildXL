@@ -282,7 +282,7 @@ namespace BuildXL.Utilities
         /// <summary>
         /// Reads a ModuleId
         /// </summary>
-        public ModuleId ReadModuleId()
+        public virtual ModuleId ReadModuleId()
         {
             Start<ModuleId>();
             var value = new ModuleId(ReadInt32Compact());
@@ -326,7 +326,7 @@ namespace BuildXL.Utilities
         /// <summary>
         /// Reads a DirectoryArtifact
         /// </summary>
-        public DirectoryArtifact ReadDirectoryArtifact()
+        public virtual DirectoryArtifact ReadDirectoryArtifact()
         {
             Start<DirectoryArtifact>();
             // TODO: This can be optimized so a uint can represent both the partial seal id and the isSharedOpaque field

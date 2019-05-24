@@ -279,7 +279,7 @@ namespace BuildXL.Utilities
         /// <summary>
         /// Writes a DirectoryArtifact
         /// </summary>
-        public void Write(DirectoryArtifact value)
+        public virtual void Write(DirectoryArtifact value)
         {
             Start<DirectoryArtifact>();
             Write(value.Path);
