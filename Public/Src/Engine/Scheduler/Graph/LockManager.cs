@@ -228,10 +228,10 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(Process process)
         {
             var builder = GetPathAccessLockBuilder();
-            // // builder.AddAccesses(process.FileOutputs, AccessType.Write);
-            // // builder.AddAccesses(process.DirectoryOutputs, AccessType.Write);
-            // // builder.AddAccesses(process.Dependencies, AccessType.Read);
-            // // builder.AddAccesses(process.DirectoryDependencies, AccessType.Read);
+            builder.AddAccesses(process.FileOutputs, AccessType.Write);
+            builder.AddAccesses(process.DirectoryOutputs, AccessType.Write);
+            builder.AddAccesses(process.Dependencies, AccessType.Read);
+            builder.AddAccesses(process.DirectoryDependencies, AccessType.Read);
             return builder.Acquire();
         }
 
@@ -241,9 +241,9 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(IpcPip ipcPip)
         {
             var builder = GetPathAccessLockBuilder();
-            // // builder.AddAccesses(ipcPip.FileDependencies, AccessType.Read);
-            // // builder.AddAccesses(ipcPip.DirectoryDependencies, AccessType.Read);
-            // builder.AddAccess(ipcPip.OutputFile, AccessType.Write);
+            builder.AddAccesses(ipcPip.FileDependencies, AccessType.Read);
+            builder.AddAccesses(ipcPip.DirectoryDependencies, AccessType.Read);
+            builder.AddAccess(ipcPip.OutputFile, AccessType.Write);
             return builder.Acquire();
         }
 
@@ -253,7 +253,7 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(WriteFile writeFile)
         {
             var builder = GetPathAccessLockBuilder();
-            // builder.AddAccess(writeFile.Destination, AccessType.Write);
+            builder.AddAccess(writeFile.Destination, AccessType.Write);
             return builder.Acquire();
         }
 
@@ -263,8 +263,8 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(CopyFile copyFile)
         {
             var builder = GetPathAccessLockBuilder();
-            // builder.AddAccess(copyFile.Destination, AccessType.Write);
-            // builder.AddAccess(copyFile.Source, AccessType.Read);
+            builder.AddAccess(copyFile.Destination, AccessType.Write);
+            builder.AddAccess(copyFile.Source, AccessType.Read);
             return builder.Acquire();
         }
 
@@ -274,8 +274,8 @@ namespace BuildXL.Scheduler.Graph
         public PathAccessGroupLock AcquirePathAccessLock(SealDirectory sealDirectory)
         {
             var builder = GetPathAccessLockBuilder();
-            // builder.AddAccess(sealDirectory.DirectoryRoot, AccessType.Read);
-            // // builder.AddAccesses(sealDirectory.Contents, AccessType.Read);
+            builder.AddAccess(sealDirectory.DirectoryRoot, AccessType.Read);
+            builder.AddAccesses(sealDirectory.Contents, AccessType.Read);
             return builder.Acquire();
         }
 

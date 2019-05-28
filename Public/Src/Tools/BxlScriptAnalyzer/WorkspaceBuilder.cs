@@ -145,7 +145,7 @@ namespace BuildXL.FrontEnd.Script.Analyzer
             // If there is an explicit engine abstraction, we set it
             if (frontEndEngineAbstraction != null)
             {
-                frontEndHostController.SetState(frontEndEngineAbstraction, pipGraph: null, configuration: commandlineConfig);
+                frontEndHostController.SetState(frontEndEngineAbstraction, pipGraph: null, fragmentManager: null, configuration: commandlineConfig);
             }
 
             var config = controller.ParseConfig(commandlineConfig);
@@ -166,6 +166,7 @@ namespace BuildXL.FrontEnd.Script.Analyzer
                 if (!controller.PopulateGraph(
                     cache: cache,
                     graph: null /* No need to create pips */,
+                    fragmentManager: null,
                     engineAbstraction: frontEndEngineAbstraction ?? new BasicFrontEndEngineAbstraction(frontEndContext.PathTable, frontEndContext.FileSystem,config),
                     evaluationFilter: evaluationFilter,
                     configuration: config,

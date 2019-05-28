@@ -18,14 +18,11 @@ using BuildXL.Pips.Operations;
 using BuildXL.Scheduler.Filter;
 using BuildXL.Scheduler.Graph;
 using BuildXL.Storage;
-using BuildXL.ToolSupport;
 using BuildXL.Utilities;
 using BuildXL.Utilities.Collections;
 using BuildXL.Utilities.Configuration.Mutable;
 using BuildXL.Utilities.Instrumentation.Common;
 using BuildXL.Utilities.ParallelAlgorithms;
-using Newtonsoft.Json;
-using PipGraphFragments;
 using static BuildXL.Scheduler.Graph.PipGraph;
 
 namespace BuildXL.FrontEnd.PipGraphFragments
@@ -37,19 +34,16 @@ namespace BuildXL.FrontEnd.PipGraphFragments
     /// <param name="args">
     /// args[0]: path to the file where the arguments are serialized
     /// </param>
-    public class Program : ToolProgram<PipGraphFragmentsArguments>
+    public class Program
     {
-        private static string Usage => $"Usage: {System.Diagnostics.Process.GetCurrentProcess().MainModule.ModuleName} <path to argument file>";
-
         private Program()
-            : base("PipGraphFragmentRunner")
         { }
 
         public static int Main(string[] arguments)
         {
             try
             {
-                new Program().Run(arguments[0]);// return new Program().MainHandler(arguments);
+                new Program().Run(arguments[0], arguments[1], arguments[2]);
             }
             catch (Exception e)
             {
@@ -59,12 +53,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             return -1;
         }
 
-        public override int Run(PipGraphFragmentsArguments args)
-        {
-            return 0;
-        }
-
-        public int Run(string cachedDirectory)
+        public int Run(string cachedDirectory, string moduleDirectory, string outputDirectory)
         {
             if (!WriteModuleDepsAndFragments(cachedDirectory))
             {
@@ -85,7 +74,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             var pathTable = new PathTable();
             var fileSystem = new PassThroughFileSystem(pathTable);
             var engineContext = EngineContext.CreateNew(CancellationToken.None, pathTable, fileSystem);
-            PipFragmentContext pipFragmentContext = new PipFragmentContext();
+            PipGraphFragmentContext pipFragmentContext = new PipGraphFragmentContext();
 
             MountPathExpander mountPathExpander = ReadMountPathExpander(pipFragmentContext, engineContext);
             ConfigFileState configFileState = ReadConfigFileState(pipFragmentContext, engineContext);
@@ -185,7 +174,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             }
         }
 
-        private ConfigFileState ReadConfigFileState(PipFragmentContext pipFragmentContext, PipExecutionContext context)
+        private ConfigFileState ReadConfigFileState(PipGraphFragmentContext pipFragmentContext, PipExecutionContext context)
         {
             using (FileStream stream = new FileStream(@"d:\modules\configFileState", FileMode.Open))
             using (RemapReader reader = new RemapReader(pipFragmentContext, stream, context))
@@ -209,7 +198,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             }
         }
 
-        private MountPathExpander ReadMountPathExpander(PipFragmentContext pipFragmentContext, PipExecutionContext context)
+        private MountPathExpander ReadMountPathExpander(PipGraphFragmentContext pipFragmentContext, PipExecutionContext context)
         {
             using (FileStream stream = new FileStream(@"d:\modules\mountpathexpander", FileMode.Open))
             using (RemapReader reader = new RemapReader(pipFragmentContext, stream, context))
@@ -243,7 +232,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             }
         }
 
-        private static void ReadPipGraphFragments(PipExecutionContext context, ConcurrentBigMap<string, HashSet<string>> moduleDependencies, Builder pg, PipFragmentContext pipFragmentContext)
+        private static void ReadPipGraphFragments(PipExecutionContext context, ConcurrentBigMap<string, HashSet<string>> moduleDependencies, Builder pg, PipGraphFragmentContext pipFragmentContext)
         {
             var moduleDependents = moduleDependencies.SelectMany(kvp => kvp.Value.Select(dependency => (dependent: kvp.Key, dependency))).ToLookup(t => t.dependency, t => t.dependent);
             int total = 0;
@@ -291,7 +280,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
 
         private static void ReadPipGraphFragments2(PipExecutionContext context, ConcurrentBigMap<string, HashSet<string>> moduleDependencies, Builder pg)
         {
-            var pipFragmentContext = new PipFragmentContext();
+            var pipFragmentContext = new PipGraphFragmentContext();
             int total = 0;
             long time = 0;
             ConcurrentDictionary<string, Task> readTasks = new ConcurrentDictionary<string, Task>();
@@ -339,7 +328,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
         private static long readTime;
         private static long otherAddToGraphTime;
 
-        private static void ReadPipGraphFragment(PipExecutionContext context, Builder pg, PipFragmentContext pipFragmentContext, string file)
+        private static void ReadPipGraphFragment(PipExecutionContext context, Builder pg, PipGraphFragmentContext pipFragmentContext, string file)
         {
             using (FileStream stream = new FileStream(file, FileMode.Open))
             using (RemapReader reader = new RemapReader(pipFragmentContext, stream, context))
@@ -427,7 +416,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             long writeTime = 0;
             int done = 0;
             int num = graph.PipGraph.Modules.Keys.Count();
-            foreach(var moduleId in graph.PipGraph.Modules.Keys)
+            Parallel.ForEach(graph.PipGraph.Modules.Keys, moduleId =>
             {
                 string moduleName = GetModuleName(moduleId, graph.PipTable, graph.PipGraph, graph.Context.StringTable);
                 using (FileStream stream = new FileStream(@"d:\modules\" + moduleName + ".bin", FileMode.Create))
@@ -467,7 +456,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
                         Console.WriteLine("Done: " + done + " of " + num + " find time: " + findTime / 1000 + "seconds,  write time: " + writeTime / 1000 + " seconds, hydratetime: " + hydrateTime / 1000 + " seconds = " + hydrateTime / 1000.0 / 60.0 + " minutes");
                     }
                 }
-            } //);
+            });
 
             return pipsToModule;
         }
@@ -542,38 +531,6 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             }
 
             return true;
-        }
-
-        public override bool TryParse(string[] rawArgs, out PipGraphFragmentsArguments arguments)
-        {
-            if (rawArgs.Length < 1)
-            {
-                Console.Error.WriteLine(Usage);
-                arguments = default;
-                return false;
-            }
-
-            arguments = DeserializeArguments(rawArgs[0]);
-            return true;
-        }
-
-        private static PipGraphFragmentsArguments DeserializeArguments(string file)
-        {
-            var serializer = JsonSerializer.Create(new JsonSerializerSettings
-            {
-                PreserveReferencesHandling = PreserveReferencesHandling.Objects,
-                NullValueHandling = NullValueHandling.Include,
-                Formatting = Formatting.Indented
-            });
-
-            PipGraphFragmentsArguments arguments;
-            using (var sr = new StreamReader(file))
-            using (var reader = new JsonTextReader(sr))
-            {
-                arguments = serializer.Deserialize<PipGraphFragmentsArguments>(reader);
-            }
-
-            return arguments;
         }
     }
 }

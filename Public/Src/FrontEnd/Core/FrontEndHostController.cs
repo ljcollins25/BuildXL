@@ -156,7 +156,7 @@ namespace BuildXL.FrontEnd.Core
         /// Ideally, Engine should be set in the constructor but parsing the config file prevents this ideal scenario.
         /// Until we create an engine before parsing the config, the engine can't be set in the constructor above.
         /// </summary>
-        internal void SetState(FrontEndEngineAbstraction engine, IPipGraph pipGraph, IConfiguration configuration)
+        internal void SetState(FrontEndEngineAbstraction engine, IPipGraph pipGraph, IPipGraphFragmentManager fragmentManager, IConfiguration configuration)
         {
             Contract.Requires(engine != null);
             Contract.Requires(configuration != null);
@@ -166,7 +166,8 @@ namespace BuildXL.FrontEnd.Core
             Engine = engine;
             FrontEndArtifactManager = CreateFrontEndArtifactManager();
             PipGraph = pipGraph;
-            
+            PipGraphFragmentManager = fragmentManager;
+
             // TODO: The EngineBasedFileSystem should be replaced with a tracking file system that wraps the passed in filesystem
             // so that the speccache, engine caching/tracking all work for the real and for the fake filesystem.s
             if (FrontEndContext.FileSystem is PassThroughFileSystem)
@@ -314,6 +315,7 @@ namespace BuildXL.FrontEnd.Core
         bool IFrontEndController.PopulateGraph(
             Task<Possible<EngineCache>> cacheTask,
             IPipGraph graph,
+            IPipGraphFragmentManager fragmentManager,
             FrontEndEngineAbstraction engineAbstraction,
             EvaluationFilter evaluationFilter,
             IConfiguration configuration,
@@ -328,7 +330,7 @@ namespace BuildXL.FrontEnd.Core
             const string MyFrontEndName = "DScript";
 
             InitializeInternal(cacheTask);
-            SetState(engineAbstraction, graph, configuration);
+            SetState(engineAbstraction, graph, fragmentManager, configuration);
 
             // When evaluating the config file, we did not have engine initialized that's why we could not record the env variables and track enumerated directories. We do it now.
             var envVariablesUsedInConfig = EnvVariablesUsedInConfig

@@ -1519,11 +1519,11 @@ If you can't update and need this feature after July 2018 please reach out to th
             string exactFingerprintChain);
 
         [GeneratedEvent(
-            (int) LogEventId.StorePipGraphCacheDescriptorToCache,
+            (int)LogEventId.StorePipGraphCacheDescriptorToCache,
             EventGenerators = EventGenerators.LocalAndTelemetryAndStatistic,
             EventLevel = Level.Verbose,
-            Keywords = (int) Events.Keywords.UserMessage,
-            EventTask = (int) Events.Tasks.Engine,
+            Keywords = (int)Events.Keywords.UserMessage,
+            EventTask = (int)Events.Tasks.Engine,
             Message = "Storing pip graph descriptor to cache: Status: {status} | Hop count: {hopCount} | Reason: {reason} | Elapsed time: {elapsed}ms (Hashing graph inputs: {hashingGraphInputsElapsed}ms, Storing fingerprint entry: {storingFingerprintEntryElapsedMs}ms, Loading and deserialize metadata: {loadingDeserializeElapsedMs}ms)\r\n{fingerprintChains}")]
         public abstract void StorePipGraphCacheDescriptorToCache(
             LoggingContext context,
@@ -2663,6 +2663,15 @@ If you can't update and need this feature after July 2018 please reach out to th
             EventTask = (ushort)Events.Tasks.Engine,
             Message = "Change journal cannot be accessed directly. The build may still proceed but without use of change journal scanning. See log for details")]
         internal abstract void FailedToGetJournalAccessor(LoggingContext context);
+
+        [GeneratedEvent(
+            (ushort)LogEventId.FailedToLoadPipGraphFragment,
+            EventGenerators = EventGenerators.LocalOnly,
+            EventLevel = Level.Error,
+            Keywords = (int)Events.Keywords.UserMessage,
+            EventTask = (ushort)Events.Tasks.Engine,
+            Message = "Unable to load pip graph fragment from files.")]
+        internal abstract void FailedToLoadPipGraphFragment(LoggingContext context);
 
         [GeneratedEvent(
             (ushort)LogEventId.StartInitializingVm,

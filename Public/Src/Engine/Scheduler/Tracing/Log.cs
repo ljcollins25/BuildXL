@@ -4307,6 +4307,16 @@ namespace BuildXL.Scheduler.Tracing
             string directoryPath,
             string pipDescription,
             string deletedPaths);
+
+
+        [GeneratedEvent(
+            (ushort)LogEventId.FailedToLoadPipGraphFragment,
+            EventGenerators = EventGenerators.LocalOnly,
+            EventLevel = Level.Error,
+            Keywords = (int)Events.Keywords.UserMessage,
+            EventTask = (ushort)Events.Tasks.Engine,
+            Message = "Unable to add a pip from a graph fragment to the graph.")]
+        public abstract void FailedToAddFragmentPipToGraph(LoggingContext context);
     }
 }
 #pragma warning restore CA1823 // Unused field
