@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Microsoft.Windows.ProjFS;
 
-namespace BuildXL.Cache.ContentStore.Vfs.Managed
+namespace BuildXL.Cache.ContentStore.Vfs.Provider
 {
     /// <summary>
     /// Implements IComparer using <see cref="Microsoft.Windows.ProjFS.Utils.FileNameCompare(string, string)"/>.

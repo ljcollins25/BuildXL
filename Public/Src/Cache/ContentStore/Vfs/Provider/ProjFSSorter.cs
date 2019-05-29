@@ -4,7 +4,7 @@
 using System.Collections.Generic;
 using Microsoft.Windows.ProjFS;
 
-namespace BuildXL.Cache.ContentStore.Vfs.Managed
+namespace BuildXL.Cache.ContentStore.Vfs.Provider
 {
     using Utils = Microsoft.Windows.ProjFS.Utils;
 

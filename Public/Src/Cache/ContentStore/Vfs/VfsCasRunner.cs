@@ -35,7 +35,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
         {
             // Create VFS root
             using (var fileLog = new FileLog((configuration.RootPath / "Bvfs.log").Path))
-            using (var logger = new Logger(fileLog))
+            using (var logger = new Logger(fileLog, new ConsoleLog()))
             {
                 var fileSystem = new PassThroughFileSystem(logger);
                 var context = new OperationContext(new Context(logger));
@@ -61,7 +61,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
                     fileSystem,
                     logger,
                     scenario: "bvfs" + configuration.ServerGrpcPort,
-                    path => new VirtualizedContentStore(clientContentStore),
+                    path => new VirtualizedContentStore(clientContentStore, logger, configuration),
                     new LocalServerConfiguration(
                         configuration.DataRootPath,
                         new Dictionary<string, AbsolutePath>()

@@ -13,11 +13,13 @@ using BuildXL.Cache.ContentStore.Logging;
 using System.Threading.Tasks;
 using BuildXL.Utilities.Collections;
 using BuildXL.Cache.ContentStore.Utils;
+using BuildXL.Cache.ContentStore.Vfs;
 using BuildXL.Cache.ContentStore.Hashing;
 using BuildXL.Native.IO;
 using System.Diagnostics.ContractsLight;
+using System.Runtime.CompilerServices;
 
-namespace BuildXL.Cache.ContentStore.Vfs.Managed
+namespace BuildXL.Cache.ContentStore.Vfs.Provider
 {
     using AbsolutePath = Interfaces.FileSystem.AbsolutePath;
     using VirtualPath = Utilities.AbsolutePath;
@@ -30,11 +32,14 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
     public class VfsProvider
     {
         private Logger Log;
-        private VirtualizationRegistry Registry;
+        private VfsCasConfiguration Configuration;
+        private VfsContentManager ContentManager;
         private VfsTree Tree;
 
-        private string _casRelativePrefix;
-        private VfsCasConfiguration _configuration;
+        private static readonly byte[] s_contentId = new byte[] { 0 };
+        private static readonly byte[] s_providerId = new byte[] { 1 };
+
+        private readonly string _casRelativePrefix;
 
         // These variables hold the layer and scratch paths.
         private readonly int currentProcessId = Process.GetCurrentProcess().Id;
@@ -42,14 +47,19 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
         private readonly VirtualizationInstance virtualizationInstance;
 
         // TODO: Cache enumeration listings
-        private readonly ObjectCache<string, List<VfsNode>> enumerationCache;
+        private readonly ObjectCache<string, List<VfsNode>> enumerationCache = new ObjectCache<string, List<VfsNode>>(1103);
         private readonly ConcurrentDictionary<Guid, ActiveEnumeration> activeEnumerations = new ConcurrentDictionary<Guid, ActiveEnumeration>();
         private readonly ConcurrentDictionary<int, CancellationTokenSource> activeCommands = new ConcurrentDictionary<int, CancellationTokenSource>();
 
-        private NotificationCallbacks notificationCallbacks;
-
-        public VfsProvider(VfsCasConfiguration configuration)
+        public VfsProvider(Logger log, VfsCasConfiguration configuration, VfsContentManager contentManager, VfsTree tree)
         {
+            Log = log;
+            Configuration = configuration;
+            Tree = tree;
+            ContentManager = contentManager;
+
+            _casRelativePrefix = Configuration.VfsCasRootPath.Path.Substring(Configuration.VfsRootPath.Path.Length + 1) + Path.DirectorySeparatorChar;
+
             // Enable notifications if the user requested them.
             var notificationMappings = new List<NotificationMapping>();
 
@@ -68,42 +78,51 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                 Log.Fatal(ex, "Failed to create VirtualizationInstance.");
                 throw;
             }
-
-            // Set up notifications.
-            notificationCallbacks = new NotificationCallbacks(
-                this,
-                virtualizationInstance,
-                notificationMappings);
         }
 
         public bool StartVirtualization()
         {
-            // Optional callbacks
-            virtualizationInstance.OnQueryFileName = QueryFileNameCallback;
-
-            RequiredCallbacks requiredCallbacks = new RequiredCallbacks(this);
-            HResult hr = virtualizationInstance.StartVirtualizing(requiredCallbacks);
-            if (hr != HResult.Ok)
+            return Log.PerformOperation(Configuration.VfsCasRootPath.Path, () =>
             {
-                Log.Error("Failed to start virtualization instance: {Result}", hr);
-                return false;
-            }
+                virtualizationInstance.OnQueryFileName = QueryFileNameCallback;
 
-            return true;
+                RequiredCallbacks requiredCallbacks = new RequiredCallbacks(this);
+                HResult hr = virtualizationInstance.StartVirtualizing(requiredCallbacks);
+                if (hr != HResult.Ok)
+                {
+                    Log.Error("Failed to start virtualization instance: {Result}", hr);
+                    return false;
+                }
+
+                foreach (var mount in Configuration.VirtualizationMounts)
+                {
+                    hr = Log.PerformOperation(mount.Key, () =>
+                    {
+                        return virtualizationInstance.MarkDirectoryAsPlaceholder(
+                            targetDirectoryPath: (Configuration.VfsMountRootPath / mount.Key).Path,
+                            contentId: s_contentId,
+                            providerId: s_providerId);
+                    },
+                    caller: "MarkMountDirectoryAsPlaceholder");
+
+                    if (hr != HResult.Ok)
+                    {
+                        Log.Error("Failed to start virtualization instance: {Result}", hr);
+                        return false;
+                    }
+                }
+
+                return true;
+            });
         }
 
-        private HResult IgnoreReentrantFileOperations(string relativePath, Func<HResult> action)
-        {
-            throw new NotImplementedException();
-        }
-
-        private HResult HandleCommandAsynchronously(int commandId, Func<CancellationToken, Task<HResult>> handleAsync)
+        private HResult HandleCommandAsynchronously(int commandId, Func<CancellationToken, Task<HResult>> handleAsync, [CallerMemberName] string caller = null)
         {
             var cts = new CancellationTokenSource();
             if (!activeCommands.TryAdd(commandId, cts))
             {
                 cts.Dispose();
-                return Placeholder.Todo<HResult>("How to handle this case? Certainly need to log.");
+                Log.Error($"{caller}.Async(Id={commandId}) duplicate command addition.");
             }
 
             runAsync();
@@ -115,13 +134,16 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                 {
                     using (cts)
                     {
+                        Log.Debug($"{caller}.Async(Id={commandId})");
                         var result = await Task.Run(() => handleAsync(cts.Token));
+                        Log.Debug($"{caller}.Async(Id={commandId}) => [{result}]");
                         completeCommand(result);
                     }
                 }
                 catch (Exception ex)
                 {
-                    completeCommand(Placeholder.Todo<HResult>("How to handle this case? Certainly need to log.", HResult.InternalError));
+                    Log.Error(ex, $"{caller}.Async(Id={commandId}) error");
+                    completeCommand(HResult.InternalError);
                 }
             }
 
@@ -132,7 +154,8 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                     var completionResult = virtualizationInstance.CompleteCommand(commandId, result);
                     if (completionResult != HResult.Ok)
                     {
-                        Placeholder.Todo<bool>("What to do in this case? Try reporting result after an interval to ensure pending result has already been reported??");
+                        Log.Error($"{caller}.Async(Id={commandId}) error completing command.");
+
                     }
                 }
             }
@@ -143,7 +166,7 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             if (!enumerationCache.TryGetValue(relativePath, out var items))
             {
                 items = EnumerateChildItems(relativePath).ToListSorted(ProjectedFileNameSorter.Instance);
-                enumerationCache.AddItem(relativePath, items);
+                //enumerationCache.AddItem(relativePath, items);
             }
 
             return items;
@@ -172,8 +195,6 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             uint triggeringProcessId,
             string triggeringProcessImageFileName)
         {
-            Log.Info("----> StartDirectoryEnumerationCallback Path [{Path}]", relativePath);
-
             // Enumerate the corresponding directory in the layer and ensure it is sorted the way
             // ProjFS expects.
             ActiveEnumeration activeEnumeration = new ActiveEnumeration(GetChildItemsSorted(relativePath));
@@ -186,8 +207,6 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                 return HResult.InternalError;
             }
 
-            Log.Info("<---- StartDirectoryEnumerationCallback {Result}", HResult.Ok);
-
             return HResult.Ok;
         }
 
@@ -198,8 +217,6 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             bool restartScan,
             IDirectoryEnumerationResults enumResult)
         {
-            Log.Info("----> GetDirectoryEnumerationCallback filterFileName [{Filter}]", filterFileName);
-
             // Find the requested enumeration.  It should have been put there by StartDirectoryEnumeration.
             if (!activeEnumerations.TryGetValue(enumerationId, out ActiveEnumeration enumeration))
             {
@@ -257,21 +274,16 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                 }
             }
 
-            Log.Info("<---- GetDirectoryEnumerationCallback {Result}", hr);
             return hr;
         }
 
         internal HResult EndDirectoryEnumerationCallback(
             Guid enumerationId)
         {
-            Log.Info("----> EndDirectoryEnumerationCallback");
-
             if (!activeEnumerations.TryRemove(enumerationId, out ActiveEnumeration enumeration))
             {
                 return HResult.InternalError;
             }
-
-            Log.Info("<---- EndDirectoryEnumerationCallback {Result}", HResult.Ok);
 
             return HResult.Ok;
         }
@@ -282,36 +294,11 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             uint triggeringProcessId,
             string triggeringProcessImageFileName)
         {
-            Log.Info("----> GetPlaceholderInfoCallback [{Path}]", relativePath);
-            Log.Info("  Placeholder creation triggered by [{ProcName} {PID}]", triggeringProcessImageFileName, triggeringProcessId);
-
             if (triggeringProcessId == currentProcessId)
             {
                 // The current process cannot trigger placeholder creation to prevent deadlock do to re-entrancy
                 // Just pretend the file doesn't exist.
                 return HResult.FileNotFound;
-            }
-
-            // TODO: Prevent recursion for creation of placeholder for CAS relative path and potentially when replacing symlink at real location
-
-            if (relativePath.StartsWith(_casRelativePrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                var casRelativePath = relativePath.Substring(_casRelativePrefix.Length);
-                if (VfsUtilities.TryParseCasRelativePath(casRelativePath, out var hash, out var index)
-                    && Tree.TryGetSpecificFileNode(hash, index, out var fileNode))
-                {
-                    return HandleCommandAsynchronously(commandId, async token =>
-                    {
-                        await Registry.PlaceVirtualFileAsync(relativePath, fileNode, token);
-
-                        // TODO: Create hardlink / move to original location to replace symlink?
-                        return HResult.Ok;
-                    });
-                }
-                else
-                {
-                    return HResult.FileNotFound;
-                }
             }
 
             // FileRealizationMode.Copy = just create a normal placeholder
@@ -320,38 +307,50 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             // 1. Try to create a placeholder by hardlinking from local CAS
             // 2. Create hardlink in VFS unified CAS
 
-            HResult hr = HResult.Ok;
             if (!Tree.TryGetNode(relativePath, out var node, out var nodeIndex))
             {
-                hr = HResult.FileNotFound;
-            }
-            else if (node.IsDirectory)
-            {
-                hr = virtualizationInstance.WritePlaceholderInfo(
-                    relativePath: relativePath.EndsWith(node.Name) ? relativePath : Path.Combine(Path.GetDirectoryName(relativePath), node.Name),
-                    creationTime: node.Timestamp,
-                    lastAccessTime: node.Timestamp,
-                    lastWriteTime: node.Timestamp,
-                    changeTime: node.Timestamp,
-                    fileAttributes: node.IsDirectory ? FileAttributes.Directory : FileAttributes.Normal,
-                    endOfFile: node.Size,
-                    isDirectory: node.IsDirectory,
-                    contentId: new byte[] { 0 },
-                    providerId: new byte[] { 1 });
+                if (relativePath.StartsWith(_casRelativePrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    var casRelativePath = relativePath.Substring(_casRelativePrefix.Length);
+                    if (VfsUtilities.TryParseCasRelativePath(casRelativePath, out var hash, out var index)
+                        && Tree.TryGetSpecificFileNode(hash, index, out var fileNode))
+                    {
+                        return HandleCommandAsynchronously(commandId, async token =>
+                        {
+                            await ContentManager.PlaceVirtualFileAsync(relativePath, fileNode, token);
+
+                            // TODO: Create hardlink / move to original location to replace symlink?
+                            return HResult.Ok;
+                        });
+                    }
+                }
+
+                return HResult.FileNotFound;
             }
             else
             {
-                hr = IgnoreReentrantFileOperations(relativePath, () =>
+                relativePath = relativePath.EndsWith(node.Name) ? relativePath : Path.Combine(Path.GetDirectoryName(relativePath), node.Name);
+                if (node.IsDirectory)
+                {
+                    return virtualizationInstance.WritePlaceholderInfo(
+                        relativePath: relativePath,
+                        creationTime: node.Timestamp,
+                        lastAccessTime: node.Timestamp,
+                        lastWriteTime: node.Timestamp,
+                        changeTime: node.Timestamp,
+                        fileAttributes: node.IsDirectory ? FileAttributes.Directory : FileAttributes.Normal,
+                        endOfFile: node.Size,
+                        isDirectory: node.IsDirectory,
+                        contentId: new byte[] { 0 },
+                        providerId: new byte[] { 1 });
+                }
+                else
                 {
                     var fileNode = (VfsFileNode)node;
-                    var result = Registry.TryCreateSymlink(nodeIndex, fileNode);
-
+                    var result = ContentManager.TryCreateSymlink(relativePath, nodeIndex, fileNode);
                     return result ? HResult.Ok : HResult.InternalError;
-                });
+                }
             }
-
-            Log.Info("<---- GetPlaceholderInfoCallback {Result}", hr);
-            return hr;
         }
 
         internal HResult GetFileDataCallback(
@@ -365,17 +364,12 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
             uint triggeringProcessId,
             string triggeringProcessImageFileName)
         {
-            Log.Info("----> GetFileDataCallback relativePath [{Path}]", relativePath);
-            Log.Info("  triggered by [{ProcName} {PID}]", triggeringProcessImageFileName, triggeringProcessId);
-
             // We should never create file placeholders so this should not be necessary
             return HResult.FileNotFound;
         }
 
         private HResult QueryFileNameCallback(string relativePath)
         {
-            Log.Info("----> QueryFileNameCallback relativePath [{Path}]", relativePath);
-
             // First try normal lookup
             if (Tree.TryGetNode(relativePath, out var node))
             {
@@ -421,12 +415,14 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                 uint triggeringProcessId,
                 string triggeringProcessImageFileName)
             {
-                return provider.StartDirectoryEnumerationCallback(
-                    commandId,
-                    enumerationId,
-                    relativePath,
-                    triggeringProcessId,
-                    triggeringProcessImageFileName);
+                return provider.Log.PerformOperation(
+                    $"Id={commandId}, Path={relativePath}, EnumId={enumerationId}, ProcId={triggeringProcessId}, ProcName={triggeringProcessImageFileName}",
+                    () => provider.StartDirectoryEnumerationCallback(
+                        commandId,
+                        enumerationId,
+                        relativePath,
+                        triggeringProcessId,
+                        triggeringProcessImageFileName));
             }
 
             public HResult GetDirectoryEnumerationCallback(
@@ -436,18 +432,20 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                 bool restartScan,
                 IDirectoryEnumerationResults enumResult)
             {
-                return provider.GetDirectoryEnumerationCallback(
-                    commandId,
-                    enumerationId,
-                    filterFileName,
-                    restartScan,
-                    enumResult);
+                return provider.Log.PerformOperation(
+                    $"Id={commandId}, EnumId={enumerationId}, Filter={filterFileName}",
+                    () => provider.GetDirectoryEnumerationCallback(
+                        commandId,
+                        enumerationId,
+                        filterFileName,
+                        restartScan,
+                        enumResult));
             }
 
             public HResult EndDirectoryEnumerationCallback(
                 Guid enumerationId)
             {
-                return provider.EndDirectoryEnumerationCallback(enumerationId);
+                return provider.Log.PerformOperation($"EnumId={enumerationId}", () => provider.EndDirectoryEnumerationCallback(enumerationId));
             }
 
             public HResult GetPlaceholderInfoCallback(
@@ -456,11 +454,13 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                 uint triggeringProcessId,
                 string triggeringProcessImageFileName)
             {
-                return provider.GetPlaceholderInfoCallback(
-                    commandId,
-                    relativePath,
-                    triggeringProcessId,
-                    triggeringProcessImageFileName);
+                return provider.Log.PerformOperation(
+                    $"Id={commandId}, Path={relativePath}, ProcId={triggeringProcessId}, ProcName={triggeringProcessImageFileName}",
+                    () => provider.GetPlaceholderInfoCallback(
+                        commandId,
+                        relativePath,
+                        triggeringProcessId,
+                        triggeringProcessImageFileName));
             }
 
             public HResult GetFileDataCallback(
@@ -474,16 +474,18 @@ namespace BuildXL.Cache.ContentStore.Vfs.Managed
                 uint triggeringProcessId,
                 string triggeringProcessImageFileName)
             {
-                return provider.GetFileDataCallback(
-                    commandId,
-                    relativePath,
-                    byteOffset,
-                    length,
-                    dataStreamId,
-                    contentId,
-                    providerId,
-                    triggeringProcessId,
-                    triggeringProcessImageFileName);
+                return provider.Log.PerformOperation(
+                    $"Id={commandId}, Path={relativePath}, ProcId={triggeringProcessId}, ProcName={triggeringProcessImageFileName}",
+                    () => provider.GetFileDataCallback(
+                        commandId,
+                        relativePath,
+                        byteOffset,
+                        length,
+                        dataStreamId,
+                        contentId,
+                        providerId,
+                        triggeringProcessId,
+                        triggeringProcessImageFileName));
             }
         }
     }

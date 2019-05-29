@@ -28,18 +28,18 @@ namespace BuildXL.Cache.ContentStore.Vfs
     /// <todoc />
     public class VirtualizedContentSession : ContentSessionBase
     {
-        private IContentSession InnerSession { get; }
-        private VirtualizedContentStore Store { get; }
         protected override Tracer Tracer { get; } = new Tracer(nameof(VirtualizedContentSession));
 
-        private PassThroughFileSystem FileSystem;
-        private VfsTree VfsTree;
+        private readonly IContentSession InnerSession { get; }
+        private readonly VirtualizedContentStore Store { get; }
+        private readonly PassThroughFileSystem _fileSystem;
 
         public VirtualizedContentSession(VirtualizedContentStore store, IContentSession session, string name)
             : base(name)
         {
             Store = store;
             InnerSession = session;
+            _fileSystem = new PassThroughFileSystem();
         }
 
         /// <inheritdoc />
@@ -78,9 +78,13 @@ namespace BuildXL.Cache.ContentStore.Vfs
         /// <inheritdoc />
         protected async override Task<PlaceFileResult> PlaceFileCoreAsync(OperationContext operationContext, ContentHash contentHash, AbsolutePath path, FileAccessMode accessMode, FileReplacementMode replacementMode, FileRealizationMode realizationMode, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            var virtualPath = Store.Overlay.ToVirtualPath(path);
+            var virtualPath = Store.ContentManager.ToVirtualPath(path);
+            if (virtualPath == null)
+            {
+                return await InnerSession.PlaceFileAsync(operationContext, contentHash, path, accessMode, replacementMode, realizationMode, operationContext.Token, urgencyHint);
+            }
 
-            if (replacementMode != FileReplacementMode.ReplaceExisting && FileSystem.FileExists(path))
+            if (replacementMode != FileReplacementMode.ReplaceExisting && _fileSystem.FileExists(path))
             {
                 if (replacementMode == FileReplacementMode.SkipIfExists)
                 {
@@ -94,43 +98,29 @@ namespace BuildXL.Cache.ContentStore.Vfs
                 }
             }
 
-            VfsTree.AddFileNode(virtualPath, DateTime.UtcNow, contentHash, realizationMode, accessMode);
-
-            //if (!Store.Overlay.TryPlaceFile(
-            //        virtualPath, 
-            //        contentHash, 
-            //        realizationMode, 
-            //        accessMode, 
-            //        overwrite: replacementMode == FileReplacementMode.ReplaceExisting, 
-            //        errorResult: out var errorResult))
-            //{
-            //    if (errorResult != null)
-            //    {
-            //        return new PlaceFileResult(errorResult);
-            //    }
-            //    else if (replacementMode == FileReplacementMode.FailIfExists)
-            //    {
-            //        return Placeholder.Todo<PlaceFileResult>("Cannot overwrite place result");
-            //    }
-            //    else
-            //    {
-            //        Contract.Assert(replacementMode == FileReplacementMode.SkipIfExists);
-            //        return Placeholder.Todo<PlaceFileResult>("Skipped place result");
-            //    }
-            //}
-
-            return new PlaceFileResult(GetResultCode(realizationMode, accessMode), fileSize: -1 /* Unknown */);
+            Store.Tree.AddFileNode(virtualPath, DateTime.UtcNow, contentHash, realizationMode, accessMode);
+            return new PlaceFileResult(GetPlaceResultCode(realizationMode, accessMode), fileSize: -1 /* Unknown */);
         }
 
-        private PlaceFileResult.ResultCode GetResultCode(FileRealizationMode realizationMode, FileAccessMode accessMode)
+        private PlaceFileResult.ResultCode GetPlaceResultCode(FileRealizationMode realizationMode, FileAccessMode accessMode)
         {
-            throw new NotImplementedException();
+            if (realizationMode == FileRealizationMode.Copy
+                || realizationMode == FileRealizationMode.CopyNoVerify
+                || accessMode == FileAccessMode.Write)
+            {
+                return PlaceFileResult.ResultCode.PlacedWithCopy;
+            }
+
+            return PlaceFileResult.ResultCode.PlacedWithHardLink;
         }
 
         /// <inheritdoc />
         protected override Task<IEnumerable<Task<Indexed<PlaceFileResult>>>> PlaceFileCoreAsync(OperationContext operationContext, IReadOnlyList<ContentHashWithPath> hashesWithPaths, FileAccessMode accessMode, FileReplacementMode replacementMode, FileRealizationMode realizationMode, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            return InnerSession.PlaceFileAsync(operationContext, hashesWithPaths, accessMode, replacementMode, realizationMode, operationContext.Token, urgencyHint);
+            // NOTE: Most of the IContentSession implementations throw NotImplementedException, most notably
+            // the ReadOnlyServiceClientContentSession which is used to communicate with this session. Given that,
+            // it is safe for this method to not be implemented here as well.
+            throw new NotImplementedException();
         }
 
         /// <inheritdoc />

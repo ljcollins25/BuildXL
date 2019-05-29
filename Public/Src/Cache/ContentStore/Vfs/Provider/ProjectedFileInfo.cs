@@ -4,7 +4,7 @@
 using System;
 using System.IO;
 
-namespace BuildXL.Cache.ContentStore.Vfs.Managed
+namespace BuildXL.Cache.ContentStore.Vfs.Provider
 {
     public class ProjectedFileInfo
     {

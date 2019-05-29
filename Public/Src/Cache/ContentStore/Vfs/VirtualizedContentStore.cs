@@ -6,9 +6,11 @@ using BuildXL.Cache.ContentStore.Interfaces.Results;
 using BuildXL.Cache.ContentStore.Interfaces.Sessions;
 using BuildXL.Cache.ContentStore.Interfaces.Stores;
 using BuildXL.Cache.ContentStore.Interfaces.Tracing;
+using BuildXL.Cache.ContentStore.Logging;
 using BuildXL.Cache.ContentStore.Tracing;
 using BuildXL.Cache.ContentStore.Tracing.Internal;
 using BuildXL.Cache.ContentStore.Utils;
+using BuildXL.Cache.ContentStore.Vfs.Provider;
 
 namespace BuildXL.Cache.ContentStore.Vfs
 {
@@ -19,16 +21,24 @@ namespace BuildXL.Cache.ContentStore.Vfs
     public class VirtualizedContentStore : StartupShutdownBase, IContentStore
     {
         private IContentStore InnerStore { get; }
+        public VfsCasConfiguration Configuration { get; }
+        private Logger Logger;
 
-        internal VirtualizationRegistry Overlay { get; }
+
+        internal VfsProvider Provider { get; private set; }
+        internal VfsContentManager ContentManager { get; private set; }
 
         protected override Tracer Tracer { get; } = new Tracer(nameof(VirtualizedContentStore));
+        public VfsTree Tree { get; private set; }
+
 
         /// <nodoc />
-        public VirtualizedContentStore(IContentStore innerStore)
+        public VirtualizedContentStore(IContentStore innerStore, Logger logger, VfsCasConfiguration configuration)
         {
+            Logger = logger;
             // Create long-lived session to be used with overlay (ImplicitPin=false to avoid cache full errors)
             InnerStore = innerStore;
+            Configuration = configuration;
         }
 
         /// <inheritdoc />
@@ -67,6 +77,17 @@ namespace BuildXL.Cache.ContentStore.Vfs
         protected override async Task<BoolResult> StartupCoreAsync(OperationContext context)
         {
             await InnerStore.StartupAsync(context).ThrowIfFailure();
+            Tree = new VfsTree(Configuration);
+
+            var innerSessionResult = InnerStore.CreateSession(context, "VFSInner", ImplicitPin.None).ThrowIfFailure();
+            await innerSessionResult.Session.StartupAsync(context).ThrowIfFailure();
+
+            ContentManager = new VfsContentManager(Logger, Configuration, Tree, innerSessionResult.Session);
+            Provider = new VfsProvider(Logger, Configuration, ContentManager, Tree);
+            if (!Provider.StartVirtualization())
+            {
+                return new BoolResult("Unable to start virtualizing");
+            }
 
             return await base.StartupCoreAsync(context);
         }
