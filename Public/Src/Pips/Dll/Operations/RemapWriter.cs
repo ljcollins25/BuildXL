@@ -8,7 +8,7 @@ namespace BuildXL.Pips.Operations
     /// Writes absolute paths, string ids, and pipdataentries so the values of each item are present inline in the stream.
     /// Format should be read by the remapreader.
     /// </summary>
-    public class RemapWriter : PipWriter
+    internal class RemapWriter : PipWriter
     {
         private InliningWriter m_inliningWriter;
         private SymbolTable m_symbolTable;

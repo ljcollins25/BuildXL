@@ -201,7 +201,7 @@ const relocated = p`D:/a/b/foo.cs`.relocate(d`D:/a/b`, d`D:/c/d`);
 const file = f`D:/path/to/a/file.txt`;
 const filePath = file.path;
 const fileContent = File.readAllText(f`file.txt`);
-const pipGraphFragment = File.readPipGraphFragment(""foo"", f`file.txt`);
+const pipGraphFragment = File.readPipGraphFragment(""foo"", f`file.txt`, []);
 ";
             var results = Build()
                 .Spec(Spec)

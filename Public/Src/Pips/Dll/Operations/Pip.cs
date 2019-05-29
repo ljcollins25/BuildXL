@@ -109,10 +109,7 @@ namespace BuildXL.Pips.Operations
         }
 
         #region Serialization
-        /// <summary>
-        /// Deserialize
-        /// </summary>
-        public static Pip Deserialize(PipReader reader)
+        internal static Pip Deserialize(PipReader reader)
         {
             Contract.Requires(reader != null);
             Contract.Ensures(Contract.Result<Pip>() != null);
@@ -166,10 +163,7 @@ namespace BuildXL.Pips.Operations
             return pip;
         }
 
-        /// <summary>
-        /// Serialize
-        /// </summary>
-        public void Serialize(PipWriter writer)
+        internal void Serialize(PipWriter writer)
         {
             Contract.Requires(writer != null);
             writer.Write((byte)PipType);

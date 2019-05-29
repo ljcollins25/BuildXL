@@ -77,7 +77,11 @@ namespace BuildXL.FrontEnd.Script.Ambients
                         I($"Failed adding pip graph fragment file '{file.Path.ToString(context.PathTable)}' because the file is not a source file")));
             }
 
-            var readFragmentTask = context.FrontEndHost.PipGraphFragmentManager.AddFragmentFileToGraph(name, file, deps);
+            if (context.FrontEndHost.PipGraphFragmentManager != null)
+            {
+                var readFragmentTask = context.FrontEndHost.PipGraphFragmentManager.AddFragmentFileToGraph(name, file, deps);
+            }
+
             var possibleContent = context.FrontEndHost.Engine.GetFileContentAsync(file.Path).GetAwaiter().GetResult();
             return EvaluationResult.Create(name);
         }

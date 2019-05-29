@@ -29,7 +29,7 @@ namespace Test.DScript.Ast.ErrorHandling
         [InlineData("Context.hasMount(\"foo\")")]
         [InlineData("Context.getTemplate()")]
         [InlineData("Context.getBuildEngineDirectory(\"foo\")")]
-        [InlineData("File.readPipGraphFragment(\"foo\", f`package.dsc`)")]
+        [InlineData("File.readPipGraphFragment(\"foo\", f`package.dsc`, [])")]
         [InlineData("File.readAllText(f`package.dsc`)")]
         [InlineData("File.exists(f`package.dsc`)")]
         [InlineData("File.fromPath(p`.`)")]

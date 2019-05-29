@@ -28,11 +28,20 @@ using static BuildXL.Scheduler.Graph.PipGraph;
 namespace BuildXL.FrontEnd.PipGraphFragments
 {
     /// <summary>
-    /// Main entry point for Tool.CMakeRunner.
-    /// This tool invokes our modified cmake.exe and generates a Ninja build in a subdirectory
+    /// Main entry point for Tool.PipGraphFragments.
+    /// Takes a cached graph directory and:
+    ///     1) Loads the graph
+    ///     2) Splits it by module
+    ///     3) Writes out fragments for each module
+    ///     4) Reads the fragments back in
+    ///     5) Constructs a new graph using the read in fragments
+    ///     6) Saves the constructed graph on disk
+    ///     7) Loads the saved graph to verify integrity
     /// </summary>
     /// <param name="args">
-    /// args[0]: path to the file where the arguments are serialized
+    /// args[0]: Cached graph directory
+    /// args[1]: Directory to write fragments to
+    /// args[2]: Directory to write final cached graph to
     /// </param>
     public class Program
     {
@@ -55,13 +64,13 @@ namespace BuildXL.FrontEnd.PipGraphFragments
 
         public int Run(string cachedDirectory, string moduleDirectory, string outputDirectory)
         {
-            if (!WriteModuleDepsAndFragments(cachedDirectory))
+            if (!WriteModuleDepsAndFragments(cachedDirectory, moduleDirectory))
             {
                 return 1;
             }
 
             Stopwatch sw = Stopwatch.StartNew();
-            var moduleDependencies = ReadModuleDependencies();
+            var moduleDependencies = ReadModuleDependencies(moduleDirectory);
 
             Console.WriteLine("Done get in order modules in " + sw.ElapsedMilliseconds / 1000.0);
             sw.Restart();
@@ -76,8 +85,8 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             var engineContext = EngineContext.CreateNew(CancellationToken.None, pathTable, fileSystem);
             PipGraphFragmentContext pipFragmentContext = new PipGraphFragmentContext();
 
-            MountPathExpander mountPathExpander = ReadMountPathExpander(pipFragmentContext, engineContext);
-            ConfigFileState configFileState = ReadConfigFileState(pipFragmentContext, engineContext);
+            MountPathExpander mountPathExpander = ReadMountPathExpander(pipFragmentContext, engineContext, moduleDirectory);
+            ConfigFileState configFileState = ReadConfigFileState(pipFragmentContext, engineContext, moduleDirectory);
 
             PipGraph.Builder pg = new PipGraph.Builder(
                 CreatePipTable(engineContext),
@@ -96,12 +105,12 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             Console.WriteLine("Done building pip graph. " + sw.ElapsedMilliseconds / 1000.0);
             sw.Restart();
 
-            string correlationId = ReadCorrelationId();
+            string correlationId = ReadCorrelationId(moduleDirectory);
 
             bool success = EngineSchedule.SaveExecutionStateToDiskAsync(
                     new EngineSerializer(
                         logContext,
-                        @"d:\engineCache",
+                        outputDirectory,
                         correlationId: new FileEnvelopeId(correlationId)
                     ),
                     engineContext,
@@ -128,22 +137,21 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             return 0;
         }
 
-        private string ReadCorrelationId()
+        private string ReadCorrelationId(string directory)
         {
-            return File.ReadAllText(@"d:\modules\correlationid");
+            return File.ReadAllText(Path.Combine(directory, "correlationid"));
         }
 
-        private void WriteCorrelationId(CachedGraph graph)
+        private void WriteCorrelationId(CachedGraph graph, string directory)
         {
-            File.WriteAllText(@"d:\modules\correlationid", graph.CorrelationId);
+            File.WriteAllText(Path.Combine(directory, "correlationid"), graph.CorrelationId);
         }
 
-        private bool WriteModuleDepsAndFragments(string cachedDirectory)
+        private bool WriteModuleDepsAndFragments(string cachedDirectory, string moduleDirectory)
         {
             Stopwatch sw = Stopwatch.StartNew();
             CachedGraph graph;
             ContentHashingUtilities.SetDefaultHashType(HashType.Vso0);
-            // Console.WriteLine("Starting to load cached graph.");
             bool loadedCachedGraph = LoadCacheGraph(cachedDirectory, out graph);
             Console.WriteLine("Done loading cached graph. " + sw.ElapsedMilliseconds / 1000.0);
             sw.Restart();
@@ -153,39 +161,39 @@ namespace BuildXL.FrontEnd.PipGraphFragments
                 return false;
             }
 
-            var pipsToModule = WritePipGraphFragments(graph);
+            var pipsToModule = WritePipGraphFragments(graph, moduleDirectory);
             var moduleDependencies = GetModuleDependencies(graph, pipsToModule);
-            WriteModuleDependencies(moduleDependencies);
-            WriteMountPathExpander(graph.MountPathExpander, graph.Context);
-            WriteConfigFileState(graph.ConfigFileState, graph.Context);
-            WriteCorrelationId(graph);
+            WriteModuleDependencies(moduleDependencies, moduleDirectory);
+            WriteMountPathExpander(graph.MountPathExpander, graph.Context, moduleDirectory);
+            WriteConfigFileState(graph.ConfigFileState, graph.Context, moduleDirectory);
+            WriteCorrelationId(graph, moduleDirectory);
 
             Console.WriteLine("Done writing pip fragments. in " + sw.ElapsedMilliseconds / 1000.0);
             sw.Restart();
             return true;
         }
 
-        private void WriteConfigFileState(ConfigFileState configFileState, PipExecutionContext context)
+        private void WriteConfigFileState(ConfigFileState configFileState, PipExecutionContext context, string directory)
         {
-            using (FileStream stream = new FileStream(@"d:\modules\configFileState", FileMode.Create))
+            using (FileStream stream = new FileStream(Path.Combine(directory, "configFileState"), FileMode.Create))
             using (RemapWriter writer = new RemapWriter(stream, context))
             {
                 configFileState.Serialize(writer);
             }
         }
 
-        private ConfigFileState ReadConfigFileState(PipGraphFragmentContext pipFragmentContext, PipExecutionContext context)
+        private ConfigFileState ReadConfigFileState(PipGraphFragmentContext pipFragmentContext, PipExecutionContext context, string directory)
         {
-            using (FileStream stream = new FileStream(@"d:\modules\configFileState", FileMode.Open))
+            using (FileStream stream = new FileStream(Path.Combine(directory, "configFileState"), FileMode.Open))
             using (RemapReader reader = new RemapReader(pipFragmentContext, stream, context))
             {
                 return ConfigFileState.DeserializeAsync(reader, Task.FromResult(context)).Result;
             }
         }
 
-        private void WriteModuleDependencies(ConcurrentBigMap<string, HashSet<string>> moduleDependencies)
+        private void WriteModuleDependencies(ConcurrentBigMap<string, HashSet<string>> moduleDependencies, string moduleDirectory)
         {
-            using (var stream = File.Open(@"d:\modules\moduleDeps.bin", FileMode.Create))
+            using (var stream = File.Open(Path.Combine(moduleDirectory, "moduleDeps.bin"), FileMode.Create))
             using (var writer = new BuildXLWriter(false, stream, true, false))
             {
                 moduleDependencies.Serialize(
@@ -198,27 +206,27 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             }
         }
 
-        private MountPathExpander ReadMountPathExpander(PipGraphFragmentContext pipFragmentContext, PipExecutionContext context)
+        private MountPathExpander ReadMountPathExpander(PipGraphFragmentContext pipFragmentContext, PipExecutionContext context, string directory)
         {
-            using (FileStream stream = new FileStream(@"d:\modules\mountpathexpander", FileMode.Open))
+            using (FileStream stream = new FileStream(Path.Combine(directory, "mountpathexpander"), FileMode.Open))
             using (RemapReader reader = new RemapReader(pipFragmentContext, stream, context))
             {
                 return MountPathExpander.DeserializeAsync(reader, Task.FromResult(context.PathTable)).Result;
             }
         }
 
-        private void WriteMountPathExpander(MountPathExpander mountPathExpander, PipExecutionContext context)
+        private void WriteMountPathExpander(MountPathExpander mountPathExpander, PipExecutionContext context, string directory)
         {
-            using (FileStream stream = new FileStream(@"d:\modules\mountpathexpander", FileMode.Create))
+            using (FileStream stream = new FileStream(Path.Combine(directory, "mountpathexpander"), FileMode.Create))
             using (RemapWriter writer = new RemapWriter(stream, context))
             {
                 mountPathExpander.Serialize(writer);
             }
         }
 
-        private ConcurrentBigMap<string, HashSet<string>> ReadModuleDependencies()
+        private ConcurrentBigMap<string, HashSet<string>> ReadModuleDependencies(string moduleDirectory)
         {
-            using (var stream = File.Open(@"d:\modules\moduleDeps.bin", FileMode.Open))
+            using (var stream = File.Open(Path.Combine(moduleDirectory, "moduleDeps.bin"), FileMode.Open))
             using (var reader = new BuildXLReader(false, stream, true))
             {
                 return ConcurrentBigMap<string, HashSet<string>>.Deserialize(
@@ -408,7 +416,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             }
         }
 
-        private static ConcurrentBigMap<NodeId, string> WritePipGraphFragments(CachedGraph graph)
+        private static ConcurrentBigMap<NodeId, string> WritePipGraphFragments(CachedGraph graph, string moduleDirectory)
         {
             ConcurrentBigMap<NodeId, string> pipsToModule = new ConcurrentBigMap<NodeId, string>();
             long hydrateTime = 0;
@@ -419,7 +427,7 @@ namespace BuildXL.FrontEnd.PipGraphFragments
             Parallel.ForEach(graph.PipGraph.Modules.Keys, moduleId =>
             {
                 string moduleName = GetModuleName(moduleId, graph.PipTable, graph.PipGraph, graph.Context.StringTable);
-                using (FileStream stream = new FileStream(@"d:\modules\" + moduleName + ".bin", FileMode.Create))
+                using (FileStream stream = new FileStream(Path.Combine(moduleDirectory, moduleName + ".bin"), FileMode.Create))
                 using (RemapWriter writer = new RemapWriter(stream, graph.Context))
                 {
                     Stopwatch moduleSW = Stopwatch.StartNew();

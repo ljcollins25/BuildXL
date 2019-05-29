@@ -4308,7 +4308,6 @@ namespace BuildXL.Scheduler.Tracing
             string pipDescription,
             string deletedPaths);
 
-
         [GeneratedEvent(
             (ushort)LogEventId.FailedToLoadPipGraphFragment,
             EventGenerators = EventGenerators.LocalOnly,

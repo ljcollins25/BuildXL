@@ -8,7 +8,7 @@ namespace BuildXL.Pips.Operations
     /// <summary>
     /// Reads in pips written with RemapWriter and remaps absolute paths, string ids from the value present in the stream to the value in the given for the same path/string in the given context.
     /// </summary>
-    public class RemapReader : PipReader
+    internal class RemapReader : PipReader
     {
         /// <summary>
         /// RemapReader PipGraphFragmentContext

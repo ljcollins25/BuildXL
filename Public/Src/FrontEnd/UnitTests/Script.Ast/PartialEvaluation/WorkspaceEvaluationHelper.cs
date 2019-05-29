@@ -173,7 +173,7 @@ namespace Test.DScript.Ast.PartialEvaluation
                 ? new PatchablePipGraph(oldPipGraph.DataflowGraph, oldPipGraph.PipTable, graphBuilder, maxDegreeOfParallelism: Environment.ProcessorCount)
                 : (IPipGraph)graphBuilder;
 
-            frontEndHost.SetState(Engine, pipGraph, configuration);
+            frontEndHost.SetState(Engine, pipGraph, null, configuration);
 
             return new TestResult<Interpreter>(frontEndHost, Diagnostics);
         }

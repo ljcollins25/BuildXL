@@ -410,8 +410,7 @@ namespace BuildXL.Pips
                 }
             }
 
-            ProcessQueueItem(pip, mutable);
-            // m_serializationScheduler.ScheduleSerialization(pip, mutable);
+            m_serializationScheduler.ScheduleSerialization(pip, mutable);
 
             return pipId;
         }

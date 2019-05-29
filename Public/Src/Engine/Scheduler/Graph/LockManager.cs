@@ -642,7 +642,7 @@ namespace BuildXL.Scheduler.Graph
             public bool HasReadAccess(AbsolutePath path)
             {
                 // NOTE: We don't check the access type since write access also includes read access
-                return true; // m_pathAccessMap.ContainsKey(path);
+                return m_pathAccessMap.ContainsKey(path);
             }
 
             /// <summary>
@@ -653,15 +653,13 @@ namespace BuildXL.Scheduler.Graph
             [Pure]
             public bool HasWriteAccess(AbsolutePath path)
             {
-                return true;
-                /*
                 AccessType accessType;
                 if (m_pathAccessMap.TryGetValue(path, out accessType))
                 {
                     return accessType == AccessType.Write;
                 }
 
-                return false;*/
+                return false;
             }
 
             /// <summary>
@@ -671,8 +669,8 @@ namespace BuildXL.Scheduler.Graph
             /// </summary>
             public ExclusiveSinglePathLock AcquirePathInnerExclusiveLock(AbsolutePath path)
             {
-                // Contract.Assert(m_pathAccessMap.ContainsKey(path), "Cannot acquire exclusive lock for path not in group");
-                // Contract.Assert(!m_hasOutstandingExclusiveLock, "Cannot acquire more that on exclusive inner lock for a path group");
+                Contract.Assert(m_pathAccessMap.ContainsKey(path), "Cannot acquire exclusive lock for path not in group");
+                Contract.Assert(!m_hasOutstandingExclusiveLock, "Cannot acquire more that on exclusive inner lock for a path group");
                 m_hasOutstandingExclusiveLock = true;
                 return new ExclusiveSinglePathLock(m_owner, this, path, m_owner.m_accessVerifier);
             }

@@ -13,11 +13,8 @@ namespace BuildXL.Pips.Operations
     /// <remarks>
     /// This type is internal, as the serialization/deserialization functionality is encapsulated by the PipTable.
     /// </remarks>
-    public class PipReader : BuildXLReader
+    internal class PipReader : BuildXLReader
     {
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public PipReader(bool debug, StringTable stringTable, Stream stream, bool leaveOpen)
             : base(debug, stream, leaveOpen)
         {
@@ -25,14 +22,8 @@ namespace BuildXL.Pips.Operations
             StringTable = stringTable;
         }
 
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public StringTable StringTable { get; }
 
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public Pip ReadPip()
         {
             Contract.Ensures(Contract.Result<Pip>() != null);
@@ -42,9 +33,6 @@ namespace BuildXL.Pips.Operations
             return value;
         }
 
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public PipProvenance ReadPipProvenance()
         {
             Contract.Ensures(Contract.Result<PipProvenance>() != null);
@@ -54,17 +42,11 @@ namespace BuildXL.Pips.Operations
             return value;
         }
 
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public virtual StringId ReadPipDataId()
         {
             return ReadStringId();
         }
 
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public virtual PipData ReadPipData()
         {
             Start<PipData>();
@@ -73,9 +55,6 @@ namespace BuildXL.Pips.Operations
             return value;
         }
 
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public EnvironmentVariable ReadEnvironmentVariable()
         {
             Start<EnvironmentVariable>();
@@ -84,9 +63,6 @@ namespace BuildXL.Pips.Operations
             return value;
         }
 
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public RegexDescriptor ReadRegexDescriptor()
         {
             Start<RegexDescriptor>();
@@ -95,9 +71,6 @@ namespace BuildXL.Pips.Operations
             return value;
         }
 
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public virtual PipId ReadPipId()
         {
             Start<PipId>();
@@ -106,9 +79,6 @@ namespace BuildXL.Pips.Operations
             return value;
         }
 
-        /// <summary>
-        /// PipReader
-        /// </summary>
         public ProcessSemaphoreInfo ReadProcessSemaphoreInfo()
         {
             Start<ProcessSemaphoreInfo>();
