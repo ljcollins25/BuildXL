@@ -20,7 +20,6 @@ namespace BuildXL.FrontEnd.Script.Ambients
         internal const string FromPathFunctionName = "fromPath";
         internal const string ReadAllTextFunctionName = "readAllText";
         internal const string ExistsFunctionName = "exists";
-        internal const string ReadGraphFragmentFunctionName = "readPipGraphFragment";
 
         /// <nodoc />
         public AmbientFile(PrimitiveTypes knownTypes)
@@ -37,10 +36,6 @@ namespace BuildXL.FrontEnd.Script.Ambients
             optional: OptionalParameters(AmbientTypes.EnumType),
             returnType: AmbientTypes.StringType);
 
-        private CallSignature ReadGraphFragmentSignature => CreateSignature(
-            required: RequiredParameters(AmbientTypes.StringType, AmbientTypes.PathType, AmbientTypes.ArrayType),
-            returnType: AmbientTypes.StringType);
-
         private CallSignature ExistsSignature => CreateSignature(
             required: RequiredParameters(AmbientTypes.FileType),
             returnType: AmbientTypes.BooleanType);
@@ -55,35 +50,7 @@ namespace BuildXL.FrontEnd.Script.Ambients
                     Function(FromPathFunctionName, FromPath, FromPathSignature),
                     Function(ReadAllTextFunctionName, ReadAllText, ReadAllTextSignature),
                     Function(ExistsFunctionName, Exists, ExistsSignature),
-                    Function(ReadGraphFragmentFunctionName, ReadGraphFragment, ReadGraphFragmentSignature)
                 });
-        }
-
-        [SuppressMessage("Microsoft.Usage", "CA2201:DoNotCreateReservedExceptionTypes", Justification = "It's just used as part of a wrapper.")]
-        private static EvaluationResult ReadGraphFragment(Context context, ModuleLiteral env, EvaluationStackFrame args)
-        {
-            var name = Args.AsString(args, 0);
-            
-            // File that is read here will be tracked by the input tracker in the same way the spec file.
-            var file = Args.AsFile(args, 1);
-
-            var deps = Args.AsStringArray(args, 2);
-
-            if (!file.IsSourceFile)
-            {
-                // Do not read output file.
-                throw new FileOperationException(
-                    new Exception(
-                        I($"Failed adding pip graph fragment file '{file.Path.ToString(context.PathTable)}' because the file is not a source file")));
-            }
-
-            if (context.FrontEndHost.PipGraphFragmentManager != null)
-            {
-                var readFragmentTask = context.FrontEndHost.PipGraphFragmentManager.AddFragmentFileToGraph(name, file, deps);
-            }
-
-            var possibleContent = context.FrontEndHost.Engine.GetFileContentAsync(file.Path).GetAwaiter().GetResult();
-            return EvaluationResult.Create(name);
         }
 
         [SuppressMessage("Microsoft.Usage", "CA2201:DoNotCreateReservedExceptionTypes", Justification = "It's just used as part of a wrapper.")]

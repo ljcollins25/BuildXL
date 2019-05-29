@@ -494,11 +494,6 @@ namespace File {
      */
     export declare function readAllText(file: SourceFile, encoding?: TextEncoding): string;
 
-    /**
-     * Read in a fragment of the graph as a binary file and all all pip from it to the pip graph.
-     */
-    export declare function readPipGraphFragment(name: string, file: SourceFile, dependencyNames: string[]): string;
-
     /** Returns true if a given file exists on disk. */
     export declare function exists(path: SourceFile): boolean;
 }
