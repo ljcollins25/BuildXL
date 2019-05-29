@@ -38,20 +38,6 @@ namespace BuildXL.Engine
         private readonly StringTable m_stringTable;
 
         /// <summary>
-        /// ConfigFileState
-        /// </summary>
-        public ConfigFileState ConfigFileState
-        {
-            get
-            {
-                Contract.Requires(!IsDisposed);
-                return m_configFileState;
-            }
-        }
-
-        private readonly ConfigFileState m_configFileState;
-
-        /// <summary>
         /// Path table
         /// </summary>
         public PathTable PathTable
@@ -179,8 +165,7 @@ namespace BuildXL.Engine
             PipGraph pipGraph,
             MountPathExpander mountPathExpander,
             SchedulerState schedulerState,
-            HistoricTableSizes historicTableSizes,
-            ConfigFileState configFileState)
+            HistoricTableSizes historicTableSizes)
         {
             Contract.Requires(graphId != default(Guid), "GraphId is not unique enough to be represented in EngineState");
             Contract.Requires(stringTable != null, "StringTable cannot be null");
@@ -193,7 +178,6 @@ namespace BuildXL.Engine
             Contract.Requires(pipTable != null);
             Contract.Requires(!pipTable.IsDisposed);
             Contract.Requires(pipGraph != null);
-            Contract.Requires(configFileState != null);
             Contract.Requires(mountPathExpander != null);
             Contract.Requires(schedulerState != null);
             Contract.Requires(historicTableSizes != null);
@@ -208,7 +192,6 @@ namespace BuildXL.Engine
             m_schedulerState = schedulerState;
             m_graphId = graphId;
             m_historicTableSizes = historicTableSizes;
-            m_configFileState = configFileState;
         }
 
         private EngineState(bool disposed)
@@ -236,8 +219,7 @@ namespace BuildXL.Engine
                 engineSchedule.Scheduler.PipGraph,
                 engineSchedule.MountPathExpander,
                 schedulerState,
-                engineSchedule.Context.HistoricTableSizes,
-                engineSchedule.ConfigFileState);
+                engineSchedule.Context.HistoricTableSizes);
         }
 
         /// <summary>

@@ -67,11 +67,6 @@ namespace BuildXL.Engine
         private readonly ITempDirectoryCleaner m_tempDirectoryCleaner;
 
         /// <summary>
-        /// CorrelationId
-        /// </summary>
-        public object CorrelationId => m_correlationId;
-
-        /// <summary>
         /// Constructor
         /// </summary>
         public EngineSerializer(

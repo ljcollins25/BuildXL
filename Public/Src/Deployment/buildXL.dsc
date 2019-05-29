@@ -24,7 +24,6 @@ namespace BuildXL {
             // analyzers
             importFrom("BuildXL.Tools").Execution.Analyzer.exe,
             importFrom("BuildXL.Tools").BxlScriptAnalyzer.exe,
-            importFrom("BuildXL.Tools").PipGraphFragments.exe,
             importFrom("BuildXL.Cache.VerticalStore").Analyzer.exe,
 
             // tools
@@ -62,12 +61,6 @@ namespace BuildXL {
                         contents: [
                             importFrom("BuildXL.Tools").NinjaGraphBuilder.exe,
                             importFrom("BuildXL.Tools.Ninjson").pkg.contents
-                        ]
-                    },
-                    {
-                        subfolder: r`PipGraphFragments`,
-                        contents: [
-                            importFrom("BuildXL.Tools").PipGraphFragments.exe,
                         ]
                     },
                     {

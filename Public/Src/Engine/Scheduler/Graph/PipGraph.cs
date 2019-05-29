@@ -1120,10 +1120,7 @@ namespace BuildXL.Scheduler.Graph
             return true;
         }
 
-        /// <summary>
-        /// PipFilterContext
-        /// </summary>
-        public sealed class PipFilterContext : IPipFilterContext
+        private sealed class PipFilterContext : IPipFilterContext
         {
             private readonly PipGraph m_graph;
 
@@ -1137,89 +1134,56 @@ namespace BuildXL.Scheduler.Graph
             private readonly Dictionary<PipFilter, IReadOnlySet<FileOrDirectoryArtifact>> m_cachedOutputs =
                 new Dictionary<PipFilter, IReadOnlySet<FileOrDirectoryArtifact>>(new CachedOutputKeyComparer());
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public PipFilterContext(PipGraph graph)
             {
                 m_graph = graph;
             }
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public PathTable PathTable => m_graph.Context.PathTable;
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public IList<PipId> AllPips => m_graph.PipTable.StableKeys;
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public Pip HydratePip(PipId pipId)
             {
                 Contract.Requires(pipId.IsValid);
                 return m_graph.PipTable.HydratePip(pipId, PipQueryContext.PipGraphFilterNodes);
             }
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public PipType GetPipType(PipId pipId)
             {
                 Contract.Requires(pipId.IsValid);
                 return m_graph.PipTable.GetPipType(pipId);
             }
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public long GetSemiStableHash(PipId pipId)
             {
                 Contract.Requires(pipId.IsValid);
                 return m_graph.PipTable.GetPipSemiStableHash(pipId);
             }
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public IEnumerable<PipId> GetDependencies(PipId pipId)
             {
                 Contract.Requires(pipId.IsValid);
                 return m_graph.DataflowGraph.GetIncomingEdges(pipId.ToNodeId()).Select(edge => edge.OtherNode.ToPipId());
             }
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public IEnumerable<PipId> GetDependents(PipId pipId)
             {
                 Contract.Requires(pipId.IsValid);
                 return m_graph.DataflowGraph.GetOutgoingEdges(pipId.ToNodeId()).Select(edge => edge.OtherNode.ToPipId());
             }
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public PipId GetProducer(in FileOrDirectoryArtifact fileOrDirectory)
             {
                 Contract.Requires(fileOrDirectory.IsValid);
                 return m_graph.GetProducer(fileOrDirectory);
             }
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public bool TryGetCachedOutputs(PipFilter pipFilter, out IReadOnlySet<FileOrDirectoryArtifact> outputs)
             {
                 return m_cachedOutputs.TryGetValue(pipFilter, out outputs);
             }
 
-            /// <summary>
-            /// PipFilterContext
-            /// </summary>
             public void CacheOutputs(PipFilter pipFilter, IReadOnlySet<FileOrDirectoryArtifact> outputs)
             {
                 m_cachedOutputs[pipFilter] = outputs;

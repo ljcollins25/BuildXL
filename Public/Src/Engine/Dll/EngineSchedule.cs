@@ -99,10 +99,7 @@ namespace BuildXL.Engine
 
         internal const int PipTableInitialBufferSize = 16384;
 
-        /// <summary>
-        /// Config file state
-        /// </summary>
-        public readonly ConfigFileState ConfigFileState;
+        private readonly ConfigFileState m_configFileState;
 
         private readonly FileContentTable m_fileContentTable;
 
@@ -146,7 +143,7 @@ namespace BuildXL.Engine
             m_fileContentTable = fileContentTable;
             MountPathExpander = mountPathExpander;
             m_tempCleaner = tempCleaner;
-            ConfigFileState = configFileState;
+            m_configFileState = configFileState;
             m_cache = cache;
             m_maxDegreeOfParallelism = maxDegreeOfParallelism;
         }
@@ -1451,9 +1448,9 @@ namespace BuildXL.Engine
             var schedulerPerformance = Scheduler.LogStats(loggingContext);
 
             // Log whitelist file statistics
-            if (ConfigFileState.FileAccessWhitelist != null && ConfigFileState.FileAccessWhitelist.MatchedEntryCounts.Count > 0)
+            if (m_configFileState.FileAccessWhitelist != null && m_configFileState.FileAccessWhitelist.MatchedEntryCounts.Count > 0)
             {
-                Logger.Log.WhitelistFileAccess(loggingContext, ConfigFileState.FileAccessWhitelist.MatchedEntryCounts);
+                Logger.Log.WhitelistFileAccess(loggingContext, m_configFileState.FileAccessWhitelist.MatchedEntryCounts);
             }
 
             return schedulerPerformance;
@@ -1829,28 +1826,7 @@ namespace BuildXL.Engine
         /// Synchronously saves the schedule to disk for reuse in a future run
         /// </summary>
         /// <returns>whether the operation succeeded</returns>
-        public async Task<bool> SaveToDiskAsync(EngineSerializer serializer, PipExecutionContext context,
-            HistoricTableSizes historicTableSizes)
-        {
-            var executionStateTasks = SaveExecutionStateToDiskAsync(
-                serializer,
-                context,
-                PipTable,
-                Scheduler.PipGraph,
-                MountPathExpander,
-                historicTableSizes);
-
-            // EngineSchedule specific state
-            var result = await serializer.SerializeToFileAsync(GraphCacheFile.ConfigState, ConfigFileState.Serialize);
-
-            return (await executionStateTasks) && result.Success;
-        }
-
-        /// <summary>
-        /// Synchronously saves the schedule to disk for reuse in a future run
-        /// </summary>
-        /// <returns>whether the operation succeeded</returns>
-        public async Task<bool> SaveToDiskAsync(EngineSerializer serializer, EngineContext context)
+        internal async Task<bool> SaveToDiskAsync(EngineSerializer serializer, EngineContext context)
         {
             var executionStateTasks = SaveExecutionStateToDiskAsync(
                 serializer,
@@ -1861,7 +1837,7 @@ namespace BuildXL.Engine
                 context.NextHistoricTableSizes);
 
             // EngineSchedule specific state
-            var result = await serializer.SerializeToFileAsync(GraphCacheFile.ConfigState, ConfigFileState.Serialize);
+            var result = await serializer.SerializeToFileAsync(GraphCacheFile.ConfigState, m_configFileState.Serialize);
 
             return (await executionStateTasks) && result.Success;
         }
@@ -1869,14 +1845,13 @@ namespace BuildXL.Engine
         /// <summary>
         /// Synchronously saves the subset of scheduling state needed for execution analyzers.
         /// </summary>
-        public static async Task<bool> SaveExecutionStateToDiskAsync(
+        internal static async Task<bool> SaveExecutionStateToDiskAsync(
             EngineSerializer serializer,
-            PipExecutionContext context,
+            BuildXLContext context,
             PipTable pipTable,
             PipGraph pipGraph,
             MountPathExpander mountPathExpander,
-            HistoricTableSizes historicTableSizes,
-            ConfigFileState configFileState = null)
+            HistoricTableSizes historicTableSizes)
         {
             var tasks = new[]
                 {
@@ -1894,14 +1869,7 @@ namespace BuildXL.Engine
 
             var results = await Task.WhenAll(tasks);
 
-            var result = results.All(a => a.Success);
-
-            if (configFileState != null)
-            {
-                await serializer.SerializeToFileAsync(GraphCacheFile.ConfigState, configFileState.Serialize);
-            }
-
-            return result;
+            return results.All(a => a.Success);
         }
 
         /// <summary>
