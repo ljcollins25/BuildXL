@@ -1529,28 +1529,37 @@ namespace BuildXL.Native.IO.Windows
         public void SetFileAccessControl(string path, FileSystemRights fileSystemRights, bool allow)
         {
 #if !FEATURE_CORECLR
+            path = FileSystemWin.ToLongPathIfExceedMaxPath(path);
             var denyWriteRule = new FileSystemAccessRule(
                 FileUtilitiesWin.s_worldSid,
                 fileSystemRights,
                 InheritanceFlags.None,
                 PropagationFlags.None,
                 AccessControlType.Deny);
-
-            FileInfo fileInfo = new FileInfo(path);
-
-            FileSecurity security = fileInfo.GetAccessControl();
-
-            if (allow)
+            try
             {
-                security.RemoveAccessRule(denyWriteRule);
-            }
-            else
-            {
-                security.AddAccessRule(denyWriteRule);
-            }
+                FileInfo fileInfo = new FileInfo(path);
 
-            // For some bizarre reason, instead using SetAccessControl on the caller's existing FileStream fails reliably.
-            fileInfo.SetAccessControl(security);
+                FileSecurity security = fileInfo.GetAccessControl();
+
+                if (allow)
+                {
+                    security.RemoveAccessRule(denyWriteRule);
+                }
+                else
+                {
+                    security.AddAccessRule(denyWriteRule);
+                }
+
+                // For some bizarre reason, instead using SetAccessControl on the caller's existing FileStream fails reliably.
+                fileInfo.SetAccessControl(security);
+            }
+            catch (ArgumentException e)
+            {
+                // calls to GetAccessControl sometime result in a weird ArgumentException
+                // add more data to the exception so we could find some pattern if any
+                throw new ArgumentException(I($"SetFileAccessControl arguments -- path: '{path}', FileSystemRights: {fileSystemRights}, allow: {allow}"), e);
+            }
 #endif
         }
     }
