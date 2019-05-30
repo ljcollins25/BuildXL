@@ -1020,7 +1020,7 @@ namespace Test.BuildXL.FrontEnd.Core
             }
 
             var frontEndEngineAbstraction = new BasicFrontEndEngineAbstraction(FrontEndContext.PathTable, engineContext.FileSystem, engine.Configuration);
-            controller.SetState(frontEndEngineAbstraction, GetPipGraph(), null, config);
+            controller.SetState(frontEndEngineAbstraction, GetPipGraph(), config);
 
             var evaluationFilter = fileToProcess.IsValid ? EvaluationFilter.FromSingleSpecPath(FrontEndContext.SymbolTable, FrontEndContext.PathTable, fileToProcess) : EvaluationFilter.Empty;
 

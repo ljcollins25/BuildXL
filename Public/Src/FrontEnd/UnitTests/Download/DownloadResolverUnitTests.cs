@@ -416,7 +416,7 @@ namespace Test.BuildXL.FrontEnd.Download
                     configuration);
 
                 ((IFrontEndController)host).InitializeHost(FrontEndContext, configuration);
-                host.SetState(frontEndEngineAbstraction, new TestEnv.TestPipGraph(), null, configuration);
+                host.SetState(frontEndEngineAbstraction, new TestEnv.TestPipGraph(), configuration);
 
                 var resolver = new DownloadResolver(
                     statistics,

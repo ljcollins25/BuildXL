@@ -21,6 +21,7 @@ using BuildXL.FrontEnd.Workspaces;
 using BuildXL.FrontEnd.Workspaces.Core;
 using BuildXL.Pips;
 using BuildXL.Pips.Operations;
+using BuildXL.Scheduler.Graph;
 using BuildXL.Tracing;
 using BuildXL.Utilities;
 using BuildXL.Utilities.Collections;
@@ -156,7 +157,7 @@ namespace BuildXL.FrontEnd.Core
         /// Ideally, Engine should be set in the constructor but parsing the config file prevents this ideal scenario.
         /// Until we create an engine before parsing the config, the engine can't be set in the constructor above.
         /// </summary>
-        internal void SetState(FrontEndEngineAbstraction engine, IPipGraph pipGraph, IPipGraphFragmentManager fragmentManager, IConfiguration configuration)
+        internal void SetState(FrontEndEngineAbstraction engine, IPipGraph pipGraph, IConfiguration configuration)
         {
             Contract.Requires(engine != null);
             Contract.Requires(configuration != null);
@@ -166,7 +167,7 @@ namespace BuildXL.FrontEnd.Core
             Engine = engine;
             FrontEndArtifactManager = CreateFrontEndArtifactManager();
             PipGraph = pipGraph;
-            PipGraphFragmentManager = fragmentManager;
+            PipGraphFragmentManager = new PipGraphFragmentManager(LoggingContext, FrontEndContext, pipGraph);
 
             // TODO: The EngineBasedFileSystem should be replaced with a tracking file system that wraps the passed in filesystem
             // so that the speccache, engine caching/tracking all work for the real and for the fake filesystem.s
@@ -315,7 +316,6 @@ namespace BuildXL.FrontEnd.Core
         bool IFrontEndController.PopulateGraph(
             Task<Possible<EngineCache>> cacheTask,
             IPipGraph graph,
-            IPipGraphFragmentManager fragmentManager,
             FrontEndEngineAbstraction engineAbstraction,
             EvaluationFilter evaluationFilter,
             IConfiguration configuration,
@@ -330,7 +330,7 @@ namespace BuildXL.FrontEnd.Core
             const string MyFrontEndName = "DScript";
 
             InitializeInternal(cacheTask);
-            SetState(engineAbstraction, graph, fragmentManager, configuration);
+            SetState(engineAbstraction, graph, configuration);
 
             // When evaluating the config file, we did not have engine initialized that's why we could not record the env variables and track enumerated directories. We do it now.
             var envVariablesUsedInConfig = EnvVariablesUsedInConfig
@@ -480,6 +480,15 @@ namespace BuildXL.FrontEnd.Core
                 }))
             {
                 return false;
+            }
+
+            if (PipGraphFragmentManager != null)
+            {
+                bool pipFragmentConstructionSuccess = PipGraphFragmentManager.WaitForAllFragmentsToLoad().Result;
+                if (!pipFragmentConstructionSuccess)
+                {
+                    return false;
+                }
             }
 
             return true;

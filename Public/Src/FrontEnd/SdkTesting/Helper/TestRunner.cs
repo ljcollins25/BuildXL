@@ -178,7 +178,6 @@ export function test(args: TestArguments): TestResult {{
                         frontEndContext.LoggingContext,
                         configuration,
                         mountPathExpander);
-                    var pipGraphFragmentManager = new PipGraphFragmentManager(frontEndContext.LoggingContext, pipContext, graph);
 
                     using (var cacheLayer = new EngineCache(
                         new InMemoryArtifactContentCache(),
@@ -196,7 +195,7 @@ export function test(args: TestArguments): TestResult {{
                                     AbsolutePath.Create(frontEndContext.PathTable, testMainFile),
                                 },
                                 CollectionUtilities.EmptyArray<StringId>());
-                            if (!frontEndController.PopulateGraph(cache, graph, pipGraphFragmentManager, engineAbstraction, evaluationFilter, configuration, configuration.Startup))
+                            if (!frontEndController.PopulateGraph(cache, graph, engineAbstraction, evaluationFilter, configuration, configuration.Startup))
                             {
                                 HandleDiagnostics();
                                 return false;

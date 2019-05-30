@@ -43,7 +43,6 @@ namespace BuildXL.FrontEnd.Sdk
         bool PopulateGraph(
             [NotNull]Task<Possible<EngineCache>> cache,
             [CanBeNull]IPipGraph graph,
-            [CanBeNull]IPipGraphFragmentManager fragmentManager,
             [NotNull]FrontEndEngineAbstraction engineAbstraction,
             [NotNull]EvaluationFilter evaluationFilter,
             [NotNull]IConfiguration configuration,

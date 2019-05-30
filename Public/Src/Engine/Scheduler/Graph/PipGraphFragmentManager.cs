@@ -78,64 +78,72 @@ namespace BuildXL.Scheduler.Graph
         private static bool ReadPipGraphFragment(LoggingContext loggingContext, PipExecutionContext context, IPipGraph pipGraphBuilder, PipGraphFragmentContext pipFragmentContext, AbsolutePath filePath)
         {
             int pipsAdded = 0;
-            string fileName = filePath.ToString(context.PathTable);
-            using (FileStream stream = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read))
-            using (RemapReader reader = new RemapReader(pipFragmentContext, stream, context))
+            try
             {
-                while (reader.ReadBoolean())
+                string fileName = filePath.ToString(context.PathTable);
+                using (FileStream stream = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (RemapReader reader = new RemapReader(pipFragmentContext, stream, context))
                 {
-                    pipsAdded++;
-                    var pip = Pip.Deserialize(reader);
-                    pip.ResetPipIdForTesting();
-
-                    bool added = false;
-                    switch (pip.PipType)
+                    while (reader.ReadBoolean())
                     {
-                        case PipType.Module:
-                            var modulePip = pip as ModulePip;
-                            added = pipGraphBuilder.AddModule(modulePip);
-                            break;
-                        case PipType.SpecFile:
-                            var specFilePip = pip as SpecFilePip;
-                            added = pipGraphBuilder.AddSpecFile(specFilePip);
-                            break;
-                        case PipType.Value:
-                            var valuePIp = pip as ValuePip;
-                            added = pipGraphBuilder.AddOutputValue(valuePIp);
-                            break;
-                        case PipType.Process:
-                            var p = pip as Process;
-                            added = pipGraphBuilder.AddProcess(p, default);
-                            break;
-                        case PipType.CopyFile:
-                            var copyFile = pip as CopyFile;
-                            added = pipGraphBuilder.AddCopyFile(copyFile, default);
-                            break;
-                        case PipType.WriteFile:
-                            var writeFile = pip as WriteFile;
-                            added = pipGraphBuilder.AddWriteFile(writeFile, default);
-                            break;
-                        case PipType.SealDirectory:
-                            var sealDirectory = pip as SealDirectory;
-                            if (sealDirectory.Kind == SealDirectoryKind.Opaque || sealDirectory.Kind == SealDirectoryKind.SharedOpaque)
-                            {
-                                continue;
-                            }
+                        pipsAdded++;
+                        var pip = Pip.Deserialize(reader);
+                        pip.ResetPipIdForTesting();
 
-                            added = true;
-                            var oldDirectory = sealDirectory.Directory;
-                            sealDirectory.ResetDirectoryArtifact();
-                            var mappedDirectory = pipGraphBuilder.AddSealDirectory(sealDirectory, default);
-                            reader.Context.AddMapping(oldDirectory, mappedDirectory);
-                            break;
-                    }
+                        bool added = false;
+                        switch (pip.PipType)
+                        {
+                            case PipType.Module:
+                                var modulePip = pip as ModulePip;
+                                added = pipGraphBuilder.AddModule(modulePip);
+                                break;
+                            case PipType.SpecFile:
+                                var specFilePip = pip as SpecFilePip;
+                                added = pipGraphBuilder.AddSpecFile(specFilePip);
+                                break;
+                            case PipType.Value:
+                                var valuePIp = pip as ValuePip;
+                                added = pipGraphBuilder.AddOutputValue(valuePIp);
+                                break;
+                            case PipType.Process:
+                                var p = pip as Process;
+                                added = pipGraphBuilder.AddProcess(p, default);
+                                break;
+                            case PipType.CopyFile:
+                                var copyFile = pip as CopyFile;
+                                added = pipGraphBuilder.AddCopyFile(copyFile, default);
+                                break;
+                            case PipType.WriteFile:
+                                var writeFile = pip as WriteFile;
+                                added = pipGraphBuilder.AddWriteFile(writeFile, default);
+                                break;
+                            case PipType.SealDirectory:
+                                var sealDirectory = pip as SealDirectory;
+                                if (sealDirectory.Kind == SealDirectoryKind.Opaque || sealDirectory.Kind == SealDirectoryKind.SharedOpaque)
+                                {
+                                    continue;
+                                }
 
-                    if (!added)
-                    {
-                        Logger.Log.FailedToAddFragmentPipToGraph(loggingContext);
-                        return false;
+                                added = true;
+                                var oldDirectory = sealDirectory.Directory;
+                                sealDirectory.ResetDirectoryArtifact();
+                                var mappedDirectory = pipGraphBuilder.AddSealDirectory(sealDirectory, default);
+                                reader.Context.AddMapping(oldDirectory, mappedDirectory);
+                                break;
+                        }
+
+                        if (!added)
+                        {
+                            Logger.Log.FailedToAddFragmentPipToGraph(loggingContext);
+                            return false;
+                        }
                     }
                 }
+            }
+            catch (Exception e)
+            {
+                Logger.Log.FailedToAddFragmentPipToGraph(loggingContext);
+                throw;
             }
 
             return true;

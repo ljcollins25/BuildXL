@@ -66,7 +66,6 @@ namespace BuildXL.Engine
             if ((Configuration.Engine.Phase & EnginePhases.Schedule) != 0)
             {
                 pipGraphBuilder = CreatePipGraphBuilder(loggingContext, mountsTable, reuseResult);
-                pipGraphFragmentManager = new PipGraphFragmentManager(loggingContext, Context, pipGraphBuilder);
             }
 
             // Have to do some horrible magic here to get to a proper Task<T> with the BuildXL cache since
@@ -81,7 +80,6 @@ namespace BuildXL.Engine
             if (!FrontEndController.PopulateGraph(
                 getBuildCacheTask(),
                 pipGraphBuilder,
-                pipGraphFragmentManager,
                 frontEndEngineAbstration,
                 evaluationFilter,
                 Configuration,
