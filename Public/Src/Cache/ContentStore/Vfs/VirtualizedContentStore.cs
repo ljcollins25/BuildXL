@@ -68,9 +68,23 @@ namespace BuildXL.Cache.ContentStore.Vfs
         }
 
         /// <inheritdoc />
-        public Task<GetStatsResult> GetStatsAsync(Context context)
+        public async Task<GetStatsResult> GetStatsAsync(Context context)
         {
-            return _innerStore.GetStatsAsync(context);
+            var result = await _innerStore.GetStatsAsync(context);
+            if (result.Succeeded)
+            {
+                var counters = result.CounterSet;
+                if (_contentManager != null)
+                {
+                    counters.Merge(_contentManager.Counters.ToCounterSet(), "Vfs.");
+                }
+
+                return new GetStatsResult(counters);
+            }
+            else
+            {
+                return result;
+            }
         }
 
         /// <inheritdoc />
