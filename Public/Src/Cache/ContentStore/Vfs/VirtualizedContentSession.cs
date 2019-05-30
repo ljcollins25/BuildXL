@@ -30,22 +30,24 @@ namespace BuildXL.Cache.ContentStore.Vfs
     {
         protected override Tracer Tracer { get; } = new Tracer(nameof(VirtualizedContentSession));
 
-        private readonly IContentSession InnerSession { get; }
-        private readonly VirtualizedContentStore Store { get; }
+        private readonly IContentSession _innerSession;
+        private readonly VirtualizedContentStore _store;
+        private readonly VfsContentManager _contentManager;
         private readonly PassThroughFileSystem _fileSystem;
 
-        public VirtualizedContentSession(VirtualizedContentStore store, IContentSession session, string name)
+        public VirtualizedContentSession(VirtualizedContentStore store, IContentSession session, VfsContentManager contentManager, string name)
             : base(name)
         {
-            Store = store;
-            InnerSession = session;
+            _store = store;
+            _innerSession = session;
+            _contentManager = contentManager;
             _fileSystem = new PassThroughFileSystem();
         }
 
         /// <inheritdoc />
         protected override async Task<BoolResult> StartupCoreAsync(OperationContext context)
         {
-            await InnerSession.StartupAsync(context).ThrowIfFailure();
+            await _innerSession.StartupAsync(context).ThrowIfFailure();
             return await base.StartupCoreAsync(context);
         }
 
@@ -53,35 +55,37 @@ namespace BuildXL.Cache.ContentStore.Vfs
         protected override async Task<BoolResult> ShutdownCoreAsync(OperationContext context)
         {
             var result = await base.ShutdownCoreAsync(context);
-            result &= await InnerSession.ShutdownAsync(context);
+            result &= await _innerSession.ShutdownAsync(context);
             return result;
         }
 
         /// <inheritdoc />
         protected override Task<OpenStreamResult> OpenStreamCoreAsync(OperationContext operationContext, ContentHash contentHash, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            return InnerSession.OpenStreamAsync(operationContext, contentHash, operationContext.Token, urgencyHint);
+            return _innerSession.OpenStreamAsync(operationContext, contentHash, operationContext.Token, urgencyHint);
         }
 
         /// <inheritdoc />
         protected override Task<PinResult> PinCoreAsync(OperationContext operationContext, ContentHash contentHash, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            return InnerSession.PinAsync(operationContext, contentHash, operationContext.Token, urgencyHint);
+            return _innerSession.PinAsync(operationContext, contentHash, operationContext.Token, urgencyHint);
         }
 
         /// <inheritdoc />
         protected override Task<IEnumerable<Task<Indexed<PinResult>>>> PinCoreAsync(OperationContext operationContext, IReadOnlyList<ContentHash> contentHashes, UrgencyHint urgencyHint, Counter retryCounter, Counter fileCounter)
         {
-            return InnerSession.PinAsync(operationContext, contentHashes, operationContext.Token, urgencyHint);
+            return _innerSession.PinAsync(operationContext, contentHashes, operationContext.Token, urgencyHint);
         }
 
         /// <inheritdoc />
         protected async override Task<PlaceFileResult> PlaceFileCoreAsync(OperationContext operationContext, ContentHash contentHash, AbsolutePath path, FileAccessMode accessMode, FileReplacementMode replacementMode, FileRealizationMode realizationMode, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            var virtualPath = Store.ContentManager.ToVirtualPath(path);
+            var node = _store.Tree.AddFileNode(contentHash, realizationMode, accessMode);
+
+            var virtualPath = _store.ContentManager.ToVirtualPath(path);
             if (virtualPath == null)
             {
-                return await InnerSession.PlaceFileAsync(operationContext, contentHash, path, accessMode, replacementMode, realizationMode, operationContext.Token, urgencyHint);
+                return await _innerSession.PlaceFileAsync(operationContext, contentHash, path, accessMode, replacementMode, realizationMode, operationContext.Token, urgencyHint);
             }
 
             if (replacementMode != FileReplacementMode.ReplaceExisting && _fileSystem.FileExists(path))
@@ -98,7 +102,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
                 }
             }
 
-            Store.Tree.AddFileNode(virtualPath, DateTime.UtcNow, contentHash, realizationMode, accessMode);
+            _store.Tree.AddFileNode(virtualPath, DateTime.UtcNow, contentHash, realizationMode, accessMode);
             return new PlaceFileResult(GetPlaceResultCode(realizationMode, accessMode), fileSize: -1 /* Unknown */);
         }
 
@@ -126,25 +130,25 @@ namespace BuildXL.Cache.ContentStore.Vfs
         /// <inheritdoc />
         protected override Task<PutResult> PutFileCoreAsync(OperationContext operationContext, ContentHash contentHash, AbsolutePath path, FileRealizationMode realizationMode, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            return InnerSession.PutFileAsync(operationContext, contentHash, path, realizationMode, operationContext.Token, urgencyHint);
+            return _innerSession.PutFileAsync(operationContext, contentHash, path, realizationMode, operationContext.Token, urgencyHint);
         }
 
         /// <inheritdoc />
         protected override Task<PutResult> PutFileCoreAsync(OperationContext operationContext, HashType hashType, AbsolutePath path, FileRealizationMode realizationMode, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            return InnerSession.PutFileAsync(operationContext, hashType, path, realizationMode, operationContext.Token, urgencyHint);
+            return _innerSession.PutFileAsync(operationContext, hashType, path, realizationMode, operationContext.Token, urgencyHint);
         }
 
         /// <inheritdoc />
         protected override Task<PutResult> PutStreamCoreAsync(OperationContext operationContext, ContentHash contentHash, Stream stream, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            return InnerSession.PutStreamAsync(operationContext, contentHash, stream, operationContext.Token, urgencyHint);
+            return _innerSession.PutStreamAsync(operationContext, contentHash, stream, operationContext.Token, urgencyHint);
         }
 
         /// <inheritdoc />
         protected override Task<PutResult> PutStreamCoreAsync(OperationContext operationContext, HashType hashType, Stream stream, UrgencyHint urgencyHint, Counter retryCounter)
         {
-            return InnerSession.PutStreamAsync(operationContext, hashType, stream, operationContext.Token, urgencyHint);
+            return _innerSession.PutStreamAsync(operationContext, hashType, stream, operationContext.Token, urgencyHint);
         }
     }
 }

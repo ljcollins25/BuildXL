@@ -33,38 +33,36 @@ namespace BuildXL.Cache.ContentStore.Vfs
 
         // TODO: Allow switching between hydration on CreatePlaceholder and GetFileData
 
-        private readonly VfsTree tree;
-        private readonly VfsCasConfiguration configuration;
+        private readonly VfsTree _tree;
+        private readonly VfsCasConfiguration _configuration;
         private readonly Logger _logger;
 
-        private readonly IContentSession ContentSession;
+        private readonly IContentSession _contentSession;
         private readonly DisposableDirectory _tempDirectory;
         private readonly PassThroughFileSystem _fileSystem;
 
         public VfsContentManager(Logger logger, VfsCasConfiguration configuration, VfsTree tree, IContentSession contentSession)
         {
-            this._logger = logger;
-            this.configuration = configuration;
-            this.tree = tree;
-
-            ContentSession = contentSession;
-
+            _logger = logger;
+            _configuration = configuration;
+            _tree = tree;
+            _contentSession = contentSession;
             _fileSystem = new PassThroughFileSystem();
             _tempDirectory = new DisposableDirectory(_fileSystem, configuration.DataRootPath / "temp");
         }
 
         internal VirtualPath ToVirtualPath(FullPath path)
         {
-            foreach (var mount in configuration.VirtualizationMounts)
+            foreach (var mount in _configuration.VirtualizationMounts)
             {
                 if (path.TryGetRelativePath(mount.Value, out var mountRelativePath))
                 {
-                    RelativePath relativePath = configuration.VfsMountRelativeRoot / mount.Key / mountRelativePath;
+                    RelativePath relativePath = _configuration.VfsMountRelativeRoot / mount.Key / mountRelativePath;
                     return relativePath.Path;
                 }
             }
 
-            if (path.TryGetRelativePath(configuration.VfsRootPath, out var rootRelativePath))
+            if (path.TryGetRelativePath(_configuration.VfsRootPath, out var rootRelativePath))
             {
                 return rootRelativePath;
             }
@@ -74,7 +72,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
 
         internal FullPath ToFullPath(string relativePath)
         {
-            return configuration.VfsRootPath / relativePath;
+            return _configuration.VfsRootPath / relativePath;
         }
 
         private PlaceFileResult.ResultCode GetPlaceResultCode(FileRealizationMode realizationMode, FileAccessMode accessMode)
@@ -89,14 +87,14 @@ namespace BuildXL.Cache.ContentStore.Vfs
             return PlaceFileResult.ResultCode.PlacedWithHardLink;
         }
 
-        public bool TryCreateSymlink(VirtualPath relativeSourcePath, int nodeIndex, VfsFileNode fileNode)
+        public bool TryCreateSymlink(AbsolutePath sourcePath, int nodeIndex, VfsFileNode fileNode)
         {
-            return _logger.PerformOperation($"RelativePath={relativeSourcePath}, NodeIndex={nodeIndex}, Hash={fileNode.Hash}",
+            return _logger.PerformOperation($"SourcePath={sourcePath}, TargetPath={nodeIndex}, Hash={fileNode.Hash}",
                 () =>
                 {
                     var casRelativePath = VfsUtilities.CreateCasRelativePath(fileNode.Hash, nodeIndex);
-                    var fullSourcePath = configuration.VfsRootPath / relativeSourcePath;
-                    var fullTargetPath = configuration.VfsCasRootPath / casRelativePath;
+                    var fullSourcePath = _configuration.VfsRootPath / relativeSourcePath;
+                    var fullTargetPath = _configuration.VfsCasRootPath / casRelativePath;
                     var result = FileUtilities.TryCreateSymbolicLink(symLinkFileName: fullSourcePath.Path, targetFileName: fullTargetPath.Path, isTargetFile: true);
                     if (result.Succeeded)
                     {
@@ -113,7 +111,7 @@ namespace BuildXL.Cache.ContentStore.Vfs
         internal async Task PlaceVirtualFileAsync(VirtualPath relativePath, VfsFileNode node, CancellationToken token)
         {
             var tempFilePath = _tempDirectory.CreateRandomFileName();
-            var result = await ContentSession.PlaceFileAsync(
+            var result = await _contentSession.PlaceFileAsync(
                 Placeholder.Todo<Context>("Should we capture the context id of the original place file?", new Context(_logger)),
                 node.Hash,
                 tempFilePath,
