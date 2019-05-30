@@ -937,6 +937,13 @@ namespace BuildXL.Engine
                 mutableConfig.Sandbox.UnsafeSandboxConfigurationMutable.UnexpectedFileAccessesAreErrors = false;
             }
 
+            // Untrack accesses to vfs cas root to hide the aspect where virtualized files have
+            // targets under the vfs cas root
+            if (mutableConfig.Cache.VfsCasRoot.IsValid)
+            {
+                mutableConfig.Sandbox.GlobalUntrackedPaths.Add(mutableConfig.Cache.VfsCasRoot);
+            }
+
             // Turn off incremental scheduling when incompatible features are enabled.
             if (mutableConfig.Schedule.IncrementalScheduling)
             {

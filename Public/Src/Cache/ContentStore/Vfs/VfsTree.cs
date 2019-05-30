@@ -99,13 +99,6 @@ namespace BuildXL.Cache.ContentStore.Vfs
         }
     }
 
-    public class FilePlacementData
-    {
-        public readonly ContentHash Hash;
-        public readonly FileRealizationMode RealizationMode;
-        public readonly FileAccessMode AccessMode;
-    }
-
     public abstract class VfsNode
     {
         public readonly string Name;

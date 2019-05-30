@@ -18,6 +18,7 @@ using BuildXL.Cache.ContentStore.Hashing;
 using BuildXL.Native.IO;
 using System.Diagnostics.ContractsLight;
 using System.Runtime.CompilerServices;
+using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 
 namespace BuildXL.Cache.ContentStore.Vfs.Provider
 {
@@ -312,12 +313,11 @@ namespace BuildXL.Cache.ContentStore.Vfs.Provider
                 if (relativePath.StartsWith(_casRelativePrefix, StringComparison.OrdinalIgnoreCase))
                 {
                     var casRelativePath = relativePath.Substring(_casRelativePrefix.Length);
-                    if (VfsUtilities.TryParseCasRelativePath(casRelativePath, out var hash, out var index)
-                        && Tree.TryGetSpecificFileNode(hash, index, out var fileNode))
+                    if (VfsUtilities.TryParseVfsCasRelativePath(casRelativePath, out var data))
                     {
                         return HandleCommandAsynchronously(commandId, async token =>
                         {
-                            await ContentManager.PlaceVirtualFileAsync(relativePath, fileNode, token);
+                            await ContentManager.PlaceHydratedFileAsync(relativePath, data, token);
 
                             // TODO: Create hardlink / move to original location to replace symlink?
                             return HResult.Ok;
@@ -347,8 +347,7 @@ namespace BuildXL.Cache.ContentStore.Vfs.Provider
                 else
                 {
                     var fileNode = (VfsFileNode)node;
-                    var result = ContentManager.TryCreateSymlink(relativePath, nodeIndex, fileNode);
-                    return result ? HResult.Ok : HResult.InternalError;
+                    throw Contract.AssertFailure($"Unexpected file node at path {relativePath}. Hash={fileNode.Hash}, Timestamp={fileNode.Timestamp}");
                 }
             }
         }

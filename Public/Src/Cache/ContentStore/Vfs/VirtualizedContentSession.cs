@@ -32,8 +32,8 @@ namespace BuildXL.Cache.ContentStore.Vfs
 
         private readonly IContentSession _innerSession;
         private readonly VirtualizedContentStore _store;
-        private readonly VfsContentManager _contentManager;
         private readonly PassThroughFileSystem _fileSystem;
+        private readonly VfsContentManager _contentManager;
 
         public VirtualizedContentSession(VirtualizedContentStore store, IContentSession session, VfsContentManager contentManager, string name)
             : base(name)
@@ -82,12 +82,6 @@ namespace BuildXL.Cache.ContentStore.Vfs
         {
             var node = _store.Tree.AddFileNode(contentHash, realizationMode, accessMode);
 
-            var virtualPath = _store.ContentManager.ToVirtualPath(path);
-            if (virtualPath == null)
-            {
-                return await _innerSession.PlaceFileAsync(operationContext, contentHash, path, accessMode, replacementMode, realizationMode, operationContext.Token, urgencyHint);
-            }
-
             if (replacementMode != FileReplacementMode.ReplaceExisting && _fileSystem.FileExists(path))
             {
                 if (replacementMode == FileReplacementMode.SkipIfExists)
@@ -102,8 +96,14 @@ namespace BuildXL.Cache.ContentStore.Vfs
                 }
             }
 
-            _store.Tree.AddFileNode(virtualPath, DateTime.UtcNow, contentHash, realizationMode, accessMode);
-            return new PlaceFileResult(GetPlaceResultCode(realizationMode, accessMode), fileSize: -1 /* Unknown */);
+            if (_contentManager.TryCreateSymlink(path, new FilePlacementData(contentHash, realizationMode, accessMode)))
+            {
+                return new PlaceFileResult(GetPlaceResultCode(realizationMode, accessMode), fileSize: -1 /* Unknown */);
+            }
+            else
+            {
+                return new PlaceFileResult("Unable to create symlink")
+            }
         }
 
         private PlaceFileResult.ResultCode GetPlaceResultCode(FileRealizationMode realizationMode, FileAccessMode accessMode)

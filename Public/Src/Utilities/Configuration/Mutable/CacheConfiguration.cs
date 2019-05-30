@@ -53,6 +53,7 @@ namespace BuildXL.Utilities.Configuration.Mutable
             FileChangeTrackingExclusionRoots = pathRemapper.Remap(template.FileChangeTrackingExclusionRoots);
             FileChangeTrackingInclusionRoots = pathRemapper.Remap(template.FileChangeTrackingInclusionRoots);
             UseDedupStore = template.UseDedupStore;
+            VfsCasRoot = pathRemapper.Remap(template.VfsCasRoot);
         }
 
         /// <nodoc />
@@ -132,5 +133,8 @@ namespace BuildXL.Utilities.Configuration.Mutable
 
         /// <inheritdoc />
         public bool UseDedupStore { get; set; }
+
+        /// <inheritdoc />
+        public AbsolutePath VfsCasRoot { get; set; }
     }
 }

@@ -19,6 +19,7 @@ using BuildXL.Utilities.Instrumentation.Common;
 using BuildXL.Utilities.Tasks;
 using BuildXL.Utilities.Tracing;
 using Microsoft.Win32.SafeHandles;
+using static BuildXL.Cache.ContentStore.Interfaces.FileSystem.VfsUtilities;
 using static BuildXL.Utilities.FormattableStringEx;
 
 namespace BuildXL.Engine.Cache.Artifacts
@@ -58,6 +59,7 @@ namespace BuildXL.Engine.Cache.Artifacts
         private readonly FileChangeTrackingSelector m_fileChangeTrackerSelector;
         private readonly SemaphoreSlim m_hashingSemaphore = new SemaphoreSlim(EngineEnvironmentSettings.HashingConcurrency);
         private readonly LoggingContext m_loggingContext;
+        private readonly ExpandedAbsolutePath m_vfsCasRoot;
 
         /// <summary>
         /// Creates a store which tracks files and content with the provided <paramref name="fileContentTable"/> and <paramref name="fileChangeTracker"/>.
@@ -70,7 +72,8 @@ namespace BuildXL.Engine.Cache.Artifacts
             FileContentTable fileContentTable,
             IFileChangeTrackingSubscriptionSource fileChangeTracker,
             DirectoryTranslator directoryTranslator = null,
-            FileChangeTrackingSelector changeTrackingFilter = null)
+            FileChangeTrackingSelector changeTrackingFilter = null,
+            AbsolutePath vfsCasRoot = default)
         {
             Contract.Requires(loggingContext != null);
             Contract.Requires(pathTable != null);
@@ -82,6 +85,7 @@ namespace BuildXL.Engine.Cache.Artifacts
             m_fileContentTable = fileContentTable;
             m_directoryTranslator = directoryTranslator;
             m_fileChangeTrackerSelector = changeTrackingFilter ?? FileChangeTrackingSelector.CreateAllowAllFilter(pathTable, fileChangeTracker);
+            m_vfsCasRoot = vfsCasRoot.Expand(pathTable);
         }
 
         /// <nodoc />
@@ -649,6 +653,13 @@ namespace BuildXL.Engine.Cache.Artifacts
             if (m_directoryTranslator != null)
             {
                 filePath = m_directoryTranslator.Translate(filePath);
+            }
+
+            if (m_vfsCasRoot.IsValid 
+                && filePath.TryGetRelativePath(m_vfsCasRoot.ExpandedPath, out var vfsCasRelativePath)
+                && TryParseVfsCasRelativePath(vfsCasRelativePath, out var placementData))
+            {
+                return placementData.Hash;
             }
 
             return ContentHashingUtilities.HashString(filePath.ToUpperInvariant());

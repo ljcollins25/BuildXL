@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System.Collections.Generic;
 using System.Diagnostics.ContractsLight;
 
 namespace BuildXL.Utilities.Configuration.Mutable
@@ -42,6 +43,7 @@ namespace BuildXL.Utilities.Configuration.Mutable
             ContainerConfiguration = new SandboxContainerConfiguration();
             AdminRequiredProcessExecutionMode = AdminRequiredProcessExecutionMode.Internal;
             RedirectedTempFolderRootForVmExecution = AbsolutePath.Invalid;
+            GlobalUntrackedPaths = new List<AbsolutePath>();
         }
 
         /// <nodoc />
@@ -85,6 +87,7 @@ namespace BuildXL.Utilities.Configuration.Mutable
             ContainerConfiguration = new SandboxContainerConfiguration(template.ContainerConfiguration);
             AdminRequiredProcessExecutionMode = template.AdminRequiredProcessExecutionMode;
             RedirectedTempFolderRootForVmExecution = pathRemapper.Remap(template.RedirectedTempFolderRootForVmExecution);
+            GlobalUntrackedPaths = pathRemapper.Remap(template.GlobalUntrackedPaths);
         }
 
         /// <inheritdoc />
@@ -222,5 +225,11 @@ namespace BuildXL.Utilities.Configuration.Mutable
 
         /// <inheritdoc />
         public AbsolutePath RedirectedTempFolderRootForVmExecution { get; set; }
+
+        /// <nodoc />
+        public List<AbsolutePath> GlobalUntrackedPaths { get; set; }
+
+        /// <inheritdoc />
+        IReadOnlyList<AbsolutePath> ISandboxConfiguration.GlobalUntrackedPaths => GlobalUntrackedPaths;
     }
 }

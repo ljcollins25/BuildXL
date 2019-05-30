@@ -652,7 +652,7 @@ namespace BuildXL.Processes
                     };
 
                     return ShouldSandboxedProcessExecuteExternal
-                        ? await RunExternalAsync(info, allInputPathsUnderSharedOpaques, sandboxPrepTime, cancellationToken) 
+                        ? await RunExternalAsync(info, allInputPathsUnderSharedOpaques, sandboxPrepTime, cancellationToken)
                         : await RunInternalAsync(info, allInputPathsUnderSharedOpaques, sandboxPrepTime, cancellationToken);
                 }
             }
@@ -1554,6 +1554,12 @@ namespace BuildXL.Processes
                 }
             }
 
+            // Untrack the globally untracked paths specified in the configuration
+            foreach (var path in m_sandboxConfig.GlobalUntrackedPaths)
+            {
+                m_fileAccessManifest.AddScope(path, mask: m_excludeReportAccessMask, values: FileAccessPolicy.AllowAll | FileAccessPolicy.AllowRealInputTimestamps);
+            }
+
             // For some static system mounts (currently only for AppData\Roaming) we allow CreateDirectory requests for all processes.
             // This is done because many tools are using CreateDirectory to check for the existence of that directory. Since system directories
             // always exist, allowing such requests would not lead to any changes on the disk. Moreover, we are applying an exact path policy (i.e., not a scope policy).
@@ -1594,8 +1600,8 @@ namespace BuildXL.Processes
                     }
 
                     // TODO: named semaphores are not supported in NetStandard2.0
-                    if ((!m_pip.RequiresAdmin || m_sandboxConfig.AdminRequiredProcessExecutionMode == AdminRequiredProcessExecutionMode.Internal) 
-                        && checkMessageCount 
+                    if ((!m_pip.RequiresAdmin || m_sandboxConfig.AdminRequiredProcessExecutionMode == AdminRequiredProcessExecutionMode.Internal)
+                        && checkMessageCount
                         && !OperatingSystemHelper.IsUnixOS)
                     {
                         // Semaphore names don't allow '\\' chars.
@@ -1741,7 +1747,7 @@ namespace BuildXL.Processes
                             FileAccessPolicy.AllowAll | // Symlink creation is allowed under opaques.
                             FileAccessPolicy.AllowRealInputTimestamps |
                             // For shared opaques, we need to know the (write) accesses that occurred, since we determine file ownership based on that.
-                            (directory.IsSharedOpaque? FileAccessPolicy.ReportAccess : FileAccessPolicy.Deny);
+                            (directory.IsSharedOpaque ? FileAccessPolicy.ReportAccess : FileAccessPolicy.Deny);
 
                         // For exclusive opaques, we don't need reporting back and the content is discovered by enumerating the disk
                         var mask = directory.IsSharedOpaque ? FileAccessPolicy.MaskNothing : m_excludeReportAccessMask;
@@ -1948,9 +1954,9 @@ namespace BuildXL.Processes
                 // this is not a rewrite.
                 mask: m_excludeReportAccessMask &
                       ~FileAccessPolicy.AllowRealInputTimestamps &
-                      (pathIsUnderSharedOpaque ? 
-                          ~FileAccessPolicy.AllowWrite: 
-                          FileAccessPolicy.MaskNothing)); 
+                      (pathIsUnderSharedOpaque ?
+                          ~FileAccessPolicy.AllowWrite :
+                          FileAccessPolicy.MaskNothing));
 
             allInputPaths.Add(path);
 
@@ -2039,8 +2045,8 @@ namespace BuildXL.Processes
                     Tracing.Logger.Log.PipTempDirectorySetupError(
                         m_loggingContext,
                         m_pip.SemiStableHash,
-                        m_pip.GetDescription(m_context), 
-                        path, 
+                        m_pip.GetDescription(m_context),
+                        path,
                         ex.ToStringDemystified());
                     return false;
                 }
@@ -2118,10 +2124,10 @@ namespace BuildXL.Processes
             catch (BuildXLException ex)
             {
                 Tracing.Logger.Log.PipTempDirectorySetupError(
-                    m_loggingContext, 
-                    m_pip.SemiStableHash, 
-                    m_pip.GetDescription(m_context), 
-                    path, 
+                    m_loggingContext,
+                    m_pip.SemiStableHash,
+                    m_pip.GetDescription(m_context),
+                    path,
                     ex.ToStringDemystified());
                 return false;
             }
@@ -2149,11 +2155,11 @@ namespace BuildXL.Processes
             if (!createDirectorySymlink.Succeeded)
             {
                 Tracing.Logger.Log.PipTempSymlinkRedirectionError(
-                    m_loggingContext, 
+                    m_loggingContext,
                     m_pip.SemiStableHash,
                     m_pip.GetDescription(m_context),
-                    redirectedPath, 
-                    path, 
+                    redirectedPath,
+                    path,
                     createDirectorySymlink.Failure.Describe());
                 return false;
             }
@@ -2166,8 +2172,8 @@ namespace BuildXL.Processes
             Tracing.Logger.Log.PipTempSymlinkRedirection(
                 m_loggingContext,
                 m_pip.SemiStableHash,
-                m_pip.GetDescription(m_context), 
-                redirectedPath, 
+                m_pip.GetDescription(m_context),
+                redirectedPath,
                 path);
 
             return true;
@@ -2290,7 +2296,7 @@ namespace BuildXL.Processes
         /// </summary>
         private bool PrepareInContainerPaths()
         {
-            foreach(ExpandedAbsolutePath outputDir in m_containerConfiguration.RedirectedDirectories.Keys)
+            foreach (ExpandedAbsolutePath outputDir in m_containerConfiguration.RedirectedDirectories.Keys)
             {
                 try
                 {
@@ -3590,7 +3596,7 @@ namespace BuildXL.Processes
                 using (var wrapper = Pools.StringBuilderPool.GetInstance())
                 {
                     StringBuilder sb = wrapper.Instance;
-                    for (int i = 0; i < OutputChunkInLines; )
+                    for (int i = 0; i < OutputChunkInLines;)
                     {
                         string line = await reader.ReadLineAsync();
                         if (line == null)

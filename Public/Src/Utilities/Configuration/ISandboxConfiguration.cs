@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System.Collections.Generic;
+
 namespace BuildXL.Utilities.Configuration
 {
     /// <summary>
@@ -220,5 +222,13 @@ namespace BuildXL.Utilities.Configuration
         /// This is used mainly for testing.
         /// </remarks>
         AbsolutePath RedirectedTempFolderRootForVmExecution { get; }
+
+        /// <summary>
+        /// Paths which should be untracked for all processes
+        /// </summary>
+        /// <remarks>
+        /// This is mainly used to untrack the <see cref="ICacheConfiguration.VfsCasRoot"/> so that symlink target accesses are  not reported under that root.
+        /// </remarks>
+        IReadOnlyList<AbsolutePath> GlobalUntrackedPaths { get; }
     }
 }

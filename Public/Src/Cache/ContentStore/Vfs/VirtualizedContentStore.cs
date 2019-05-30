@@ -20,40 +20,40 @@ namespace BuildXL.Cache.ContentStore.Vfs
     /// </summary>
     public class VirtualizedContentStore : StartupShutdownBase, IContentStore
     {
-        private IContentStore InnerStore { get; }
-        public VfsCasConfiguration Configuration { get; }
-        private Logger Logger;
+        private readonly IContentStore _innerStore;
+        private readonly VfsCasConfiguration _configuration;
+        private readonly Logger _logger;
+        internal VfsTree Tree { get; }
 
-
-        internal VfsProvider Provider { get; private set; }
-        internal VfsContentManager ContentManager { get; private set; }
+        private VfsProvider _provider;
+        private VfsContentManager _contentManager;
+        private IContentSession _vfsContentSession;
 
         protected override Tracer Tracer { get; } = new Tracer(nameof(VirtualizedContentStore));
-        public VfsTree Tree { get; private set; }
-
 
         /// <nodoc />
         public VirtualizedContentStore(IContentStore innerStore, Logger logger, VfsCasConfiguration configuration)
         {
-            Logger = logger;
-            // Create long-lived session to be used with overlay (ImplicitPin=false to avoid cache full errors)
-            InnerStore = innerStore;
-            Configuration = configuration;
+            _logger = logger;
+            _innerStore = innerStore;
+            _configuration = configuration;
+
+            Tree = new VfsTree(_configuration);
         }
 
         /// <inheritdoc />
         public CreateSessionResult<IReadOnlyContentSession> CreateReadOnlySession(Context context, string name, ImplicitPin implicitPin)
         {
-            return CreateSession<IReadOnlyContentSession>(context, name, implicitPin);
+            return CreateSessionCore<IReadOnlyContentSession>(context, name, implicitPin);
         }
 
         /// <inheritdoc />
         public CreateSessionResult<IContentSession> CreateSession(Context context, string name, ImplicitPin implicitPin)
         {
-            return CreateSession<IContentSession>(context, name, implicitPin);
+            return CreateSessionCore<IContentSession>(context, name, implicitPin);
         }
 
-        private CreateSessionResult<T> CreateSession<T>(Context context, string name, ImplicitPin implicitPin)
+        private CreateSessionResult<T> CreateSessionCore<T>(Context context, string name, ImplicitPin implicitPin)
             where T : class, IName
         {
             var operationContext = OperationContext(context);
@@ -61,8 +61,8 @@ namespace BuildXL.Cache.ContentStore.Vfs
                 Tracer,
                 () =>
                 {
-                    var innerSessionResult = InnerStore.CreateSession(context, name, implicitPin).ThrowIfFailure();
-                    var session = new VirtualizedContentSession(this, innerSessionResult.Session, name);
+                    var innerSessionResult = _innerStore.CreateSession(context, name, implicitPin).ThrowIfFailure();
+                    var session = new VirtualizedContentSession(this, innerSessionResult.Session, _contentManager, name);
                     return new CreateSessionResult<T>(session as T);
                 });
         }
@@ -70,21 +70,22 @@ namespace BuildXL.Cache.ContentStore.Vfs
         /// <inheritdoc />
         public Task<GetStatsResult> GetStatsAsync(Context context)
         {
-            return InnerStore.GetStatsAsync(context);
+            return _innerStore.GetStatsAsync(context);
         }
 
         /// <inheritdoc />
         protected override async Task<BoolResult> StartupCoreAsync(OperationContext context)
         {
-            await InnerStore.StartupAsync(context).ThrowIfFailure();
-            Tree = new VfsTree(Configuration);
+            await _innerStore.StartupAsync(context).ThrowIfFailure();
 
-            var innerSessionResult = InnerStore.CreateSession(context, "VFSInner", ImplicitPin.None).ThrowIfFailure();
-            await innerSessionResult.Session.StartupAsync(context).ThrowIfFailure();
+            // Create long-lived session to be used with overlay (ImplicitPin=None (i.e false) to avoid cache full errors)
+            _vfsContentSession = _innerStore.CreateSession(context, "VFSInner", ImplicitPin.None).ThrowIfFailure().Session;
+            await _vfsContentSession.StartupAsync(context).ThrowIfFailure();
 
-            ContentManager = new VfsContentManager(Logger, Configuration, Tree, innerSessionResult.Session);
-            Provider = new VfsProvider(Logger, Configuration, ContentManager, Tree);
-            if (!Provider.StartVirtualization())
+            _contentManager = new VfsContentManager(_logger, _configuration, Tree, _vfsContentSession);
+            _provider = new VfsProvider(_logger, _configuration, _contentManager, Tree);
+
+            if (!_provider.StartVirtualization())
             {
                 return new BoolResult("Unable to start virtualizing");
             }
@@ -98,7 +99,9 @@ namespace BuildXL.Cache.ContentStore.Vfs
             // Close all sessions?
             var result = await base.ShutdownCoreAsync(context);
 
-            result &= await InnerStore.ShutdownAsync(context);
+            result &= await _vfsContentSession.ShutdownAsync(context);
+
+            result &= await _innerStore.ShutdownAsync(context);
 
             return result;
         }

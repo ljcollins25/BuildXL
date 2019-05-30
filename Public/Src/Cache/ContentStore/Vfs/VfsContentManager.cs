@@ -37,6 +37,11 @@ namespace BuildXL.Cache.ContentStore.Vfs
         private readonly VfsCasConfiguration _configuration;
         private readonly Logger _logger;
 
+        /// <summary>
+        /// Unique integral id for files under vfs cas root
+        /// </summary>
+        private int _nextVfsCasTargetFileUniqueId;
+
         private readonly IContentSession _contentSession;
         private readonly DisposableDirectory _tempDirectory;
         private readonly PassThroughFileSystem _fileSystem;
@@ -87,37 +92,36 @@ namespace BuildXL.Cache.ContentStore.Vfs
             return PlaceFileResult.ResultCode.PlacedWithHardLink;
         }
 
-        public bool TryCreateSymlink(AbsolutePath sourcePath, int nodeIndex, VfsFileNode fileNode)
+        public BoolResult TryCreateSymlink(AbsolutePath sourcePath, FilePlacementData data)
         {
-            return _logger.PerformOperation($"SourcePath={sourcePath}, TargetPath={nodeIndex}, Hash={fileNode.Hash}",
+            return _logger.PerformOperation($"SourcePath={sourcePath}, Hash={data.Hash}",
                 () =>
                 {
-                    var casRelativePath = VfsUtilities.CreateCasRelativePath(fileNode.Hash, nodeIndex);
-                    var fullSourcePath = _configuration.VfsRootPath / relativeSourcePath;
+                    var index = Interlocked.Increment(ref _nextVfsCasTargetFileUniqueId);
+                    var casRelativePath = VfsUtilities.CreateCasRelativePath(data, index);
                     var fullTargetPath = _configuration.VfsCasRootPath / casRelativePath;
-                    var result = FileUtilities.TryCreateSymbolicLink(symLinkFileName: fullSourcePath.Path, targetFileName: fullTargetPath.Path, isTargetFile: true);
+                    var result = FileUtilities.TryCreateSymbolicLink(symLinkFileName: sourcePath.Path, targetFileName: fullTargetPath.Path, isTargetFile: true);
                     if (result.Succeeded)
                     {
-                        return true;
+                        return BoolResult.Success;
                     }
                     else
                     {
-                        // TODO: Log
-                        return false;
+                        return new BoolResult(result.Failure.DescribeIncludingInnerFailures());
                     }
                 });
         }
 
-        internal async Task PlaceVirtualFileAsync(VirtualPath relativePath, VfsFileNode node, CancellationToken token)
+        internal async Task PlaceHydratedFileAsync(VirtualPath relativePath, FilePlacementData data, CancellationToken token)
         {
             var tempFilePath = _tempDirectory.CreateRandomFileName();
             var result = await _contentSession.PlaceFileAsync(
                 Placeholder.Todo<Context>("Should we capture the context id of the original place file?", new Context(_logger)),
-                node.Hash,
+                data.Hash,
                 tempFilePath,
-                node.AccessMode,
+                data.AccessMode,
                 FileReplacementMode.ReplaceExisting,
-                node.RealizationMode,
+                data.RealizationMode,
                 token).ThrowIfFailure();
 
             var fullPath = ToFullPath(relativePath);
