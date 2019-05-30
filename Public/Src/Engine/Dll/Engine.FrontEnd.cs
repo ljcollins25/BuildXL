@@ -11,7 +11,6 @@ using BuildXL.Engine.Cache;
 using BuildXL.Engine.Cache.Fingerprints;
 using BuildXL.Engine.Tracing;
 using BuildXL.FrontEnd.Sdk;
-using BuildXL.Pips;
 using BuildXL.Scheduler.Graph;
 using BuildXL.Storage;
 using BuildXL.Tracing;
@@ -47,7 +46,6 @@ namespace BuildXL.Engine
 
             pipGraph = null;
             IPipGraphBuilder pipGraphBuilder = null;
-            IPipGraphFragmentManager pipGraphFragmentManager = null;
 
             if (!AddConfigurationMountsAndCompleteInitialization(loggingContext, mountsTable))
             {
@@ -92,14 +90,6 @@ namespace BuildXL.Engine
             }
 
             LogFrontEndStats(loggingContext);
-            if (pipGraphFragmentManager != null)
-            {
-                bool pipFragmentConstructionSuccess = pipGraphFragmentManager.WaitForAllFragmentsToLoad().Result;
-                if (!pipFragmentConstructionSuccess)
-                {
-                    Logger.Log.FailedToLoadPipGraphFragment(loggingContext);
-                }
-            }
 
             // Pip graph must become immutable now that evaluation is done (required to construct a scheduler).
             return pipGraphBuilder == null || (pipGraph = pipGraphBuilder.Build()) != null;

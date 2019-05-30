@@ -15,10 +15,10 @@ namespace BuildXL.Pips
         /// <summary>
         /// Add a pip graph fragment file to the graph.
         /// </summary>
-        /// <param name="name">Name of the fragment</param>
+        /// <param name="fragmentName">Name of the fragment</param>
         /// <param name="filePath">Path to the file to read.</param>
         /// <param name="dependencyNames">Name to the pip fragments this fragment depends on.</param>
-        Task<bool> AddFragmentFileToGraph(string name, AbsolutePath filePath, string[] dependencyNames);
+        Task<bool> AddFragmentFileToGraph(string fragmentName, AbsolutePath filePath, string[] dependencyNames);
 
         /// <summary>
         /// Get the current status of a fragment with a given name (pips addded to the graph from the fragment, total pips in the fragment)

@@ -25,6 +25,5 @@ export const dll = BuildXLSdk.library({
         "Test.BuildXL.EngineTestUtilities",
         "Test.BuildXL.Pips",
         "Test.BuildXL.Scheduler",
-        "PipGraphFragments"
     ],
 });

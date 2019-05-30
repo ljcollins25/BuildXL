@@ -170,7 +170,7 @@ namespace BuildXL.FrontEnd.Script.Analyzer
                     evaluationFilter: evaluationFilter,
                     configuration: config,
                     startupConfiguration: commandlineConfig.Startup))
-                {   
+                {
                     Contract.Assert(frontEndHostController != null);
                     workspace = frontEndHostController.GetWorkspace();
 

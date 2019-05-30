@@ -96,7 +96,7 @@ namespace BuildXL.FrontEnd.Sdk
         public IPipGraph PipGraph { get; protected set; }
 
         /// <summary>
-        /// Manager 
+        /// Handles adding pip fragments to the build.
         /// </summary>
         public IPipGraphFragmentManager PipGraphFragmentManager { get; protected set; }
 
