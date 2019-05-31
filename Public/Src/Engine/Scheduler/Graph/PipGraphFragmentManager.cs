@@ -75,6 +75,7 @@ namespace BuildXL.Scheduler.Graph
         {
             try
             {
+                PipId originalPipId = pip.PipId;
                 pip.ResetPipIdForTesting();
                 bool added = false;
                 switch (pip.PipType)
@@ -94,6 +95,11 @@ namespace BuildXL.Scheduler.Graph
                     case PipType.Process:
                         var p = pip as Process;
                         added = m_pipGraph.AddProcess(p, default);
+                        if (p.IsService)
+                        {
+                            m_fragmentContext.AddPipIdMapping(originalPipId.Value, p.PipId.Value);
+                        }
+
                         break;
                     case PipType.CopyFile:
                         var copyFile = pip as CopyFile;
@@ -114,7 +120,7 @@ namespace BuildXL.Scheduler.Graph
                         var oldDirectory = sealDirectory.Directory;
                         sealDirectory.ResetDirectoryArtifact();
                         var mappedDirectory = m_pipGraph.AddSealDirectory(sealDirectory, default);
-                        m_fragmentContext.AddMapping(oldDirectory, mappedDirectory);
+                        m_fragmentContext.AddDirectoryMapping(oldDirectory, mappedDirectory);
                         break;
                 }
 

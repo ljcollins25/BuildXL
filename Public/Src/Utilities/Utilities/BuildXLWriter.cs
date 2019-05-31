@@ -172,6 +172,14 @@ namespace BuildXL.Utilities
             End();
         }
 
+        /// <summary>
+        /// Write pip id value to disk.
+        /// </summary>
+        public virtual void WritePipIdValue(uint value)
+        {
+            Write(value);
+        }
+
         private void Write7BitEncodedLong(long value)
         {
             unchecked

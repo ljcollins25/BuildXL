@@ -87,6 +87,15 @@ namespace BuildXL.Pips.Operations
             return m_inliningReader.ReadStringId(InlinedStringKind.PipData);
         }
 
+        /// <summary>
+        /// RemapReader
+        /// </summary>
+        public override uint ReadPipIdValue()
+        {
+            var pipIdValue = base.ReadPipIdValue();
+            return Context.Remap(pipIdValue);
+        }
+
         private class InnerInliningReader : InliningReader
         {
             private byte[] m_pipDatabuffer = new byte[1024];

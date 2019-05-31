@@ -74,7 +74,7 @@ namespace BuildXL.Pips.Operations
         public virtual PipId ReadPipId()
         {
             Start<PipId>();
-            var value = new PipId(ReadUInt32());
+            var value = new PipId(base.ReadPipIdValue());
             End();
             return value;
         }
