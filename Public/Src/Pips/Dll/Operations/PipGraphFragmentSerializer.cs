@@ -27,11 +27,17 @@ namespace BuildXL.Pips.Operations
         public int PipsSerialized { get; private set; }
 
         /// <summary>
+        /// Name of the fragment, for printing on the console
+        /// </summary>
+        public string FragmentName { get; private set; }
+
+        /// <summary>
         /// Deserialize a pip graph fragment and call the given handleDeserializedPip function on each pip deserialized
         /// Returns true if successfully handled all pips.
         /// </summary>
-        public bool Deserialize(PipExecutionContext context, PipGraphFragmentContext pipFragmentContext, AbsolutePath filePath, Func<Pip, bool> handleDeserializedPip)
+        public bool Deserialize(string fragmentName, PipExecutionContext context, PipGraphFragmentContext pipFragmentContext, AbsolutePath filePath, Func<Pip, bool> handleDeserializedPip)
         {
+            FragmentName = fragmentName;
             PipsDeserialized = 0;
             string fileName = filePath.ToString(context.PathTable);
             Contract.Assert(File.Exists(fileName), "Pip graph fragment file doesn't exist");
@@ -59,8 +65,9 @@ namespace BuildXL.Pips.Operations
         /// <summary>
         /// Serialize list of pips to a file
         /// </summary>
-        public void Serialize(PipExecutionContext context, AbsolutePath filePath, IEnumerable<Pip> pipsToSerialize)
+        public void Serialize(string fragmentName, PipExecutionContext context, AbsolutePath filePath, IEnumerable<Pip> pipsToSerialize)
         {
+            FragmentName = fragmentName;
             PipsSerialized = 0;
             string fileName = filePath.ToString(context.PathTable);
             Contract.Assert(!File.Exists(fileName), "Pip graph fragment file to write to already exists");

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.ContractsLight;
 using System.Linq;
 using System.Threading.Tasks;
@@ -55,7 +56,7 @@ namespace BuildXL.Scheduler.Graph
             Task<bool> readFragmentTask = Task.Run(() =>
             {
                 Task.WaitAll(dependencyNames.Select(dependencyName => m_readFragmentTasks[dependencyName].Item2).ToArray());
-                return deserializer.Deserialize(m_context, m_fragmentContext, filePath, (Pip p) => AddPipToGraph(fragmentName, p));
+                return deserializer.Deserialize(fragmentName, m_context, m_fragmentContext, filePath, (Pip p) => AddPipToGraph(fragmentName, p));
             });
 
             m_readFragmentTasks[fragmentName] = (deserializer, readFragmentTask);
@@ -63,23 +64,11 @@ namespace BuildXL.Scheduler.Graph
         }
 
         /// <summary>
-        /// Return a task that ends when all fragments have been read in
-        /// If and fragment failed to add to the pip graph, false is returned, otherwise true.
+        /// GetAllFragmentTasks
         /// </summary>
-        public async Task<bool> WaitForAllFragmentsToLoad()
+        public IReadOnlyCollection<(PipGraphFragmentSerializer, Task<bool>)> GetAllFragmentTasks()
         {
-            var task = await Task.FromResult(m_readFragmentTasks.Count == 0 ? true : (await Task.WhenAll(m_readFragmentTasks.Values.Select(x => x.Item2).ToArray())).All(x => x));
-            return task;
-        }
-
-        /// <summary>
-        /// For a given pip graph fragment name, return a tuple of (pip count added so far, total pip count in this fragment)
-        /// If the total pip count has not been read in yet, it will be 0.
-        /// </summary>
-        public (int, int) GetPipsAdded(string name)
-        {
-            Contract.Assert(m_readFragmentTasks.ContainsKey(name), "No pip graph fragment has been added with name: " + name);
-            return (m_readFragmentTasks[name].Item1.PipsDeserialized, m_readFragmentTasks[name].Item1.TotalPips);
+            return m_readFragmentTasks.Select(x => x.Value).ToList();
         }
 
         private bool AddPipToGraph(string fragmentName, Pip pip)

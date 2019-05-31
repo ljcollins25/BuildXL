@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using BuildXL.Pips.Operations;
 using BuildXL.Utilities;
 
 namespace BuildXL.Pips
@@ -21,13 +22,8 @@ namespace BuildXL.Pips
         Task<bool> AddFragmentFileToGraph(string fragmentName, AbsolutePath filePath, string[] dependencyNames);
 
         /// <summary>
-        /// Get the current status of a fragment with a given name (pips addded to the graph from the fragment, total pips in the fragment)
+        /// Get a list of (fragment description, fragment load task)
         /// </summary>
-        (int,int) GetPipsAdded(string name);
-
-        /// <summary>
-        /// Get the task representing the addition of all pip fragments into the graph.
-        /// </summary>
-        Task<bool> WaitForAllFragmentsToLoad();
+        IReadOnlyCollection<(PipGraphFragmentSerializer, Task<bool>)> GetAllFragmentTasks();
     }
 }
