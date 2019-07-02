@@ -279,10 +279,10 @@ namespace BuildXL.FrontEnd.Core.Tracing
             (ushort)LogEventId.FrontEndEvaluateFragmentsProgress,
             EventGenerators = EventGenerators.LocalOnly,
             EventLevel = Level.Informational,
-            Message = Events.PhasePrefix + "Evaluation progress :: Fragments: {numFragmentsDone}/{numFragmentsTotal} :: Remaining fragments: {remaining}",
-            EventTask = (ushort)Events.Tasks.Engine,
+            Message = EventConstants.PhasePrefix + "Evaluation progress :: Fragments: {numFragmentsDone}/{numFragmentsTotal} :: Remaining fragments: {remaining}",
+            EventTask = (ushort)Tasks.Engine,
             EventOpcode = (byte)EventOpcode.Start,
-            Keywords = (int)(Events.Keywords.UserMessage | Events.Keywords.Progress | Events.Keywords.Overwritable))]
+            Keywords = (int)(Keywords.UserMessage | Keywords.Progress | Keywords.Overwritable))]
         public abstract void FrontEndEvaluatePhaseFragmentProgress(LoggingContext context, int numFragmentsDone, int numFragmentsTotal, string remaining);
 
         [GeneratedEvent(

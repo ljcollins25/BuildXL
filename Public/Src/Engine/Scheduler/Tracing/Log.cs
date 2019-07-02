@@ -4167,11 +4167,11 @@ namespace BuildXL.Scheduler.Tracing
         public abstract void LimitingResourceStatistics(LoggingContext context, IDictionary<string, long> statistics);
 
         [GeneratedEvent(
-            (int)EventId.FailedToDuplicateSchedulerFile,
+            (int) EventId.FailedToDuplicateSchedulerFile,
             EventGenerators = EventGenerators.LocalOnly,
             EventLevel = Level.Verbose,
-            EventTask = (ushort)Events.Tasks.Scheduler,
-            Keywords = (int)Events.Keywords.UserMessage,
+            EventTask = (ushort) Tasks.Scheduler,
+            Keywords = (int) Keywords.UserMessage,
             Message = "Failed to duplicate scheduler file '{sourcePath}' to '{destinationPath}': {reason}")]
         public abstract void FailedToDuplicateSchedulerFile(LoggingContext context, string sourcePath, string destinationPath, string reason);
 
@@ -4339,8 +4339,8 @@ namespace BuildXL.Scheduler.Tracing
             (ushort)LogEventId.FailedToLoadPipGraphFragment,
             EventGenerators = EventGenerators.LocalOnly,
             EventLevel = Level.Error,
-            Keywords = (int)Events.Keywords.UserMessage,
-            EventTask = (ushort)Events.Tasks.Engine,
+            Keywords = (int)Keywords.UserMessage,
+            EventTask = (ushort)Tasks.Engine,
             Message = "[{pipDescription}] Unable to add pip from fragment {fragmentName}.")]
         public abstract void FailedToAddFragmentPipToGraph(
             LoggingContext context,
