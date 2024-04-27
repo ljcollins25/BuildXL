@@ -302,7 +302,7 @@ namespace BuildXL.Cache.Host.Service.Deployment
         {
             return Context.PerformOperationAsync(Tracer, async () =>
             {
-                var manifestText = JsonSerializer.Serialize(newManifest, JsonUtilities.IndentedSerializationOptions);
+                var manifestText = JsonUtilities.JsonSerialize(newManifest, indent: true);
 
                 FileSystem.CreateDirectory(DeploymentManifestPath.Parent);
                 FileSystem.WriteAllText(DeploymentManifestPath, manifestText);

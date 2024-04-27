@@ -194,15 +194,15 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             };
 
             var deploymentRoot = TestRootDirectoryPath / "deploy";
-            var configuration = new DeploymentIngesterConfiguration(
+            var baseConfig = new DeploymentIngesterBaseConfiguration(
                 SourceRoot: base.TestRootDirectoryPath / "src",
                 DeploymentRoot: deploymentRoot,
                 DeploymentConfigurationPath: base.TestRootDirectoryPath / "DeploymentConfiguration.json",
-                FileSystem,
-                //DropExeFilePath: base.TestRootDirectoryPath / @"dropbin\drop.exe",
-                RetentionSizeGb: 1
-                //dropToken: DropToken
-            );
+                FileSystem);
+
+            var configuration = new DeploymentIngesterConfiguration(
+                baseConfig,
+                new FileSystemDeploymentContentStore(baseConfig, retentionSizeGb: 1));
 
             var ingester = new DeploymentIngester(
                 Context,

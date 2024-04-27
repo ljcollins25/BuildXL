@@ -15,6 +15,7 @@ using BuildXL.Cache.ContentStore.Interfaces.Tracing;
 using BuildXL.Cache.ContentStore.Service;
 using BuildXL.Cache.ContentStore.Stores;
 using BuildXL.Cache.ContentStore.Tracing.Internal;
+using BuildXL.Cache.Host.Configuration;
 using BuildXL.Cache.Host.Service;
 using BuildXL.Cache.Host.Service.Deployment;
 using CLAP;
@@ -46,18 +47,22 @@ namespace BuildXL.Cache.ContentStore.App
                 _consoleLog.CurrentSeverity = Interfaces.Logging.Severity.Debug;
                 var deploymentRoot = new AbsolutePath(targetDirectory);
 
+                var baseConfiguration = new DeploymentIngesterBaseConfiguration(
+                    SourceRoot: new AbsolutePath(sourceRoot),
+                    DeploymentRoot: deploymentRoot,
+                    DeploymentConfigurationPath: new AbsolutePath(deploymentConfigPath),
+                    FileSystem: _fileSystem);
+
+                var configuration = new DeploymentIngesterConfiguration(
+                    baseConfiguration,
+                    new FileSystemDeploymentContentStore(baseConfiguration, retentionSizeGb))
+                    .PopulateDefaultHandlers(
+                        dropExeFilePath: dropExePath,
+                        dropToken: dropToken);
+
                 var deploymentRunner = new DeploymentIngester(
                             context: new OperationContext(new Context(_logger)),
-                            configuration: new DeploymentIngesterConfiguration(
-                                SourceRoot: new AbsolutePath(sourceRoot),
-                                DeploymentRoot: deploymentRoot,
-                                DeploymentConfigurationPath: new AbsolutePath(deploymentConfigPath),
-                                FileSystem: _fileSystem,
-                                RetentionSizeGb: retentionSizeGb)
-                            .PopulateDefaultHandlers(
-                                dropExeFilePath: new AbsolutePath(dropExePath),
-                                dropToken: dropToken)
-                            );
+                            configuration: configuration);
 
                 deploymentRunner.RunAsync().GetAwaiter().GetResult().ThrowIfFailure();
             }

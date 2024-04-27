@@ -32,6 +32,7 @@ using BuildXL.Utilities.Collections;
 using BuildXL.Utilities.ParallelAlgorithms;
 using BuildXL.Utilities.Core.Tasks;
 using static BuildXL.Cache.Host.Configuration.DeploymentManifest;
+using BuildXL.Cache.ContentStore.Distributed.Utilities;
 
 namespace BuildXL.Cache.Host.Service
 {
@@ -583,7 +584,7 @@ namespace BuildXL.Cache.Host.Service
                     normalizedManifest.Deployment.Remove(NormalizeFilePath(watchedFile));
                 }
 
-                return JsonSerializer.Serialize(normalizedManifest);
+                return JsonUtilities.JsonSerialize(normalizedManifest);
             }
 
             /// <summary>

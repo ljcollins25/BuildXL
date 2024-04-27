@@ -31,6 +31,7 @@ using System.Linq;
 using BuildXL.Cache.Host.Service.Internal;
 using System.Reflection;
 using Test.BuildXL.TestUtilities.Xunit;
+using BuildXL.Cache.ContentStore.Distributed.Utilities;
 
 namespace BuildXL.Cache.ContentStore.Distributed.Test
 {
@@ -272,8 +273,8 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             {
                 //  Use JSON serialization and deserialization to clone manifest
                 // Also tests JSON roundtripping
-                var manifestText = JsonSerializer.Serialize(manifest);
-                return JsonSerializer.Deserialize<LauncherManifest>(manifestText);
+                var manifestText = JsonUtilities.JsonSerialize(manifest);
+                return JsonUtilities.JsonDeserialize<LauncherManifest>(manifestText);
             };
 
             var launcher = new DeploymentLauncher(settings, FileSystem, host);

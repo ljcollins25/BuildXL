@@ -33,9 +33,8 @@ public record ParsedDropUrl(IDeploymentIngesterUrlHandler Handler, Uri OriginalU
     public bool IsFile => EffectiveUrl.IsFile;
 }
 
-
 public class FuncDeploymentIngesterUrlHander(
-    DeploymentIngesterConfiguration configuration,
+    DeploymentIngesterBaseConfiguration configuration,
     string name,
     Func<(OperationContext context, ParsedDropUrl url, AbsolutePath tempDirectory, List<DeploymentFile> deploymentFiles), Task<Result<AbsolutePath>>> getFilesAsync)
     : DeploymentIngesterUrlHandlerBase(configuration)
@@ -58,7 +57,7 @@ public class FuncDeploymentIngesterUrlHander(
     }
 }
 
-public class RemoteZipDeploymentIngesterUrlHander(DeploymentIngesterConfiguration configuration)
+public class RemoteZipDeploymentIngesterUrlHander(DeploymentIngesterBaseConfiguration configuration)
     : DeploymentIngesterUrlHandlerBase(configuration)
 {
     public HttpClient Client { get; } = new();
@@ -87,7 +86,7 @@ public class RemoteZipDeploymentIngesterUrlHander(DeploymentIngesterConfiguratio
     }
 }
 
-public class FileDeploymentIngesterUrlHander(DeploymentIngesterConfiguration configuration)
+public class FileDeploymentIngesterUrlHander(DeploymentIngesterBaseConfiguration configuration)
     : DeploymentIngesterUrlHandlerBase(configuration)
 {
     public override string Name => "file";
@@ -134,7 +133,7 @@ public class FileDeploymentIngesterUrlHander(DeploymentIngesterConfiguration con
     }
 }
 
-public class DropDeploymentIngesterUrlHandler(AbsolutePath dropExeFilePath, string dropToken, DeploymentIngesterConfiguration configuration)
+public class DropDeploymentIngesterUrlHandler(AbsolutePath dropExeFilePath, string dropToken, DeploymentIngesterBaseConfiguration configuration)
     : DeploymentIngesterUrlHandlerBase(configuration)
 {
     public override string Name => "drop";
@@ -183,13 +182,13 @@ public class DropDeploymentIngesterUrlHandler(AbsolutePath dropExeFilePath, stri
     }
 }
 
-public abstract class DeploymentIngesterUrlHandlerBase(DeploymentIngesterConfiguration configuration) : IDeploymentIngesterUrlHandler
+public abstract class DeploymentIngesterUrlHandlerBase(DeploymentIngesterBaseConfiguration configuration) : IDeploymentIngesterUrlHandler
 {
     public abstract string Name { get; }
 
     public abstract Tracer Tracer { get; }
 
-    protected DeploymentIngesterConfiguration Configuration { get; } = configuration;
+    protected DeploymentIngesterBaseConfiguration Configuration { get; } = configuration;
 
     protected AbsolutePath DeploymentRoot => configuration.DeploymentRoot;
 

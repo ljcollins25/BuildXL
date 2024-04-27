@@ -9,21 +9,24 @@ using System.Web;
 using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 using BuildXL.Cache.ContentStore.Interfaces.Results;
 using BuildXL.Cache.Host.Service;
+using BuildXL.Utilities.ParallelAlgorithms;
 
 namespace BuildXL.Cache.Host.Service.Deployment
 {
     public record DeploymentIngesterConfiguration(
-        AbsolutePath SourceRoot,
-        AbsolutePath DeploymentRoot,
-        AbsolutePath DeploymentConfigurationPath,
-        IAbsFileSystem FileSystem,
-        int RetentionSizeGb)
+        DeploymentIngesterBaseConfiguration BaseConfiguration,
+        IDeploymentIngestorTargetStore Store)
+        : DeploymentIngesterBaseConfiguration(BaseConfiguration)
     {
         public Dictionary<string, IDeploymentIngesterUrlHandler> HandlerByScheme { get; } = new Dictionary<string, IDeploymentIngesterUrlHandler>();
 
-        public DeploymentIngesterConfiguration PopulateDefaultHandlers(AbsolutePath dropExeFilePath, string dropToken)
+        public DeploymentIngesterConfiguration PopulateDefaultHandlers(string dropExeFilePath, string dropToken)
         {
-            HandlerByScheme["https"] = new DropDeploymentIngesterUrlHandler(dropExeFilePath, dropToken, this);
+            if (string.IsNullOrEmpty(dropExeFilePath) && !string.IsNullOrEmpty(dropToken))
+            {
+                HandlerByScheme["https"] = new DropDeploymentIngesterUrlHandler(new AbsolutePath(dropExeFilePath), dropToken, this);
+            }
+
             return TryPopulateDefaultHandlers();
         }
 
@@ -35,6 +38,18 @@ namespace BuildXL.Cache.Host.Service.Deployment
             HandlerByScheme.TryAdd("zip", new RemoteZipDeploymentIngesterUrlHander(this));
             return this;
         }
+    }
+
+    public record DeploymentIngesterBaseConfiguration(
+        AbsolutePath SourceRoot,
+        AbsolutePath DeploymentRoot,
+        AbsolutePath DeploymentConfigurationPath,
+        IAbsFileSystem FileSystem,
+        ActionQueue ActionQueue = null)
+    {
+        public AbsolutePath DeploymentManifestPath { get; } = DeploymentUtilities.GetDeploymentManifestPath(DeploymentRoot);
+
+        public ActionQueue ActionQueue { get; } = ActionQueue ?? new ActionQueue(Environment.ProcessorCount);
     }
 
 }

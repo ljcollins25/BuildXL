@@ -46,7 +46,7 @@ namespace BuildXL.Cache.Host.Service
         /// <summary>
         /// The path to the manifest file describing contents of deployed drops/files
         /// </summary>
-        public AbsolutePath DeploymentManifestPath { get; }
+        public AbsolutePath DeploymentManifestPath => Configuration.DeploymentManifestPath;
 
         /// <summary>
         /// The path to the source root from while files should be pulled
@@ -64,7 +64,7 @@ namespace BuildXL.Cache.Host.Service
         /// <summary>
         /// Content store used to store files in content addressable layout under deployment root
         /// </summary>
-        private FileSystemContentStoreInternal Store { get; }
+        private IDeploymentIngestorTargetStore Store { get; }
 
         private Tracer Tracer { get; } = new Tracer(nameof(DeploymentIngester));
 
@@ -75,14 +75,9 @@ namespace BuildXL.Cache.Host.Service
 
         private HashSet<ContentHash> PinHashes { get; } = new HashSet<ContentHash>();
 
-        private ActionQueue ActionQueue { get; }
+        private ActionQueue ActionQueue => Configuration.ActionQueue;
 
         private readonly JsonPreprocessor _preprocessor = new JsonPreprocessor(new ConstraintDefinition[0], new Dictionary<string, string>());
-
-        /// <summary>
-        /// For testing purposes only. Used to intercept launch of drop.exe process and run custom logic in its place
-        /// </summary>
-        public Func<(string exePath, string args, string dropUrl, string targetDirectory, string relativeRoot), BoolResult> OverrideLaunchDropProcess { get; set; }
 
         private DeploymentIngesterConfiguration Configuration { get; }
 
@@ -93,23 +88,7 @@ namespace BuildXL.Cache.Host.Service
         {
             Context = context;
             Configuration = configuration;
-            var deploymentRoot = Configuration.DeploymentRoot;
-            DeploymentManifestPath = DeploymentUtilities.GetDeploymentManifestPath(deploymentRoot);
-            Store = new FileSystemContentStoreInternal(
-                configuration.FileSystem,
-                SystemClock.Instance,
-                DeploymentUtilities.GetCasRootPath(deploymentRoot),
-                new ConfigurationModel(new ContentStoreConfiguration(new MaxSizeQuota($"{configuration.RetentionSizeGb}GB"))),
-                settings: new ContentStoreSettings()
-                {
-                    TraceFileSystemContentStoreDiagnosticMessages = true,
-                    CheckFiles = false,
 
-                    // Disable empty file shortcuts to ensure all content is always placed on disk
-                    UseEmptyContentShortcut = false
-                });
-
-            ActionQueue = new ActionQueue(Environment.ProcessorCount);
             configuration.TryPopulateDefaultHandlers();
         }
 
@@ -165,8 +144,6 @@ namespace BuildXL.Cache.Host.Service
                 try
                 {
                     await Store.StartupAsync(Context).ThrowIfFailure();
-
-                    PinRequest = new PinRequest(Store.CreatePinContext());
 
                     // Read drop urls from deployment configuration
                     ReadAndDeployDeploymentConfiguration();
@@ -279,7 +256,7 @@ namespace BuildXL.Cache.Host.Service
                     deploymentManifest.Drops[drop.Url] = layout;
                 }
 
-                var manifestText = JsonSerializer.Serialize(deploymentManifest, JsonUtilities.IndentedSerializationOptions);
+                var manifestText = JsonUtilities.JsonSerialize(deploymentManifest, indent: true);
 
                 var path = DeploymentManifestPath;
 
@@ -356,11 +333,11 @@ namespace BuildXL.Cache.Host.Service
             {
                 var hashes = Drops.Values.SelectMany(d => d.Files.Select(f => f.Hash)).ToList();
 
-                var pinResults = await Store.PinAsync(Context, hashes, pinContext: PinRequest.PinContext, options: null);
+                var pinResults = await Store.PinAsync(Context, hashes);
 
                 foreach (var pinResult in pinResults)
                 {
-                    if (pinResult.Item.Succeeded)
+                    if (pinResult.Item)
                     {
                         PinHashes.Add(hashes[pinResult.Index]);
                     }
@@ -433,19 +410,11 @@ namespace BuildXL.Cache.Host.Service
         {
             return context.PerformOperationAsync(Tracer, async () =>
             {
-                // Hash file before put to prevent copying file in common case where it is already in the cache
-                var hashResult = await Store.TryHashFileAsync(context, file.SourcePath, HashType.MD5);
-                Contract.Assert(hashResult != null, $"Missing file '{file.SourcePath}'");
-
-                var result = await Store.PutFileAsync(context, file.SourcePath, FileRealizationMode.Copy, hashResult.Value.Hash, PinRequest).ThrowIfFailure();
+                var result = await Store.PutFileAsync(context, file.SourcePath).ThrowIfFailure();
 
                 var spec = drop.Files[index];
                 spec.Hash = result.ContentHash;
                 spec.Size = result.ContentSize;
-
-                var targetPath = DeploymentRoot / DeploymentUtilities.GetContentRelativePath(result.ContentHash);
-
-                Contract.Assert(FileSystem.FileExists(targetPath), $"Could not find content for hash {result.ContentHash} at '{targetPath}'");
 
                 return result;
             },
