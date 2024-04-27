@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace BuildXL.Cache.Host.Service.Deployment
 {
-    public class IngesterConfiguration
+    public class StorageIngesterConfiguration
     {
         public IDictionary<string, string[]> StorageAccountsByRegion { get; set; }
 

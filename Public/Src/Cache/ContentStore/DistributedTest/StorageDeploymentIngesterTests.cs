@@ -174,12 +174,6 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                 .SelectMany(kvp => kvp.Value.Select((account, index) => account with { VirtualAccountName = $"{kvp.Key}_{account.ContainerName}", Region = kvp.Key }))
                 .ToDictionary(a => a.VirtualAccountName);
 
-            var ingesterConfiguration = new IngesterConfiguration()
-            {
-                StorageAccountsByRegion = storageByAccountName.Values.GroupBy(a => a.Region).ToDictionary(e => e.Key, e => e.Select(a => a.VirtualAccountName).ToArray()),
-                ContentContainerName = "testcontainer"
-            };
-
             var sources = new Dictionary<string, string>()
             {
                 { @"Stamp3\info.txt", "" },
@@ -271,15 +265,27 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             };
 
             var deploymentRoot = TestRootDirectoryPath / "deploy";
-            var ingester = new StorageDeploymentIngester(
+            var baseConfig = new DeploymentIngesterBaseConfiguration(
+                SourceRoot: base.TestRootDirectoryPath / "src",
+                DeploymentRoot: deploymentRoot,
+                DeploymentConfigurationPath: base.TestRootDirectoryPath / "DeploymentConfiguration.json",
+                FileSystem);
+
+            var storageTargetStore = new StorageDeploymentTargetStore(new(
+                baseConfig,
+                new StorageIngesterConfiguration()
+                {
+                    StorageAccountsByRegion = storageByAccountName.Values.GroupBy(a => a.Region).ToDictionary(e => e.Key, e => e.Select(a => a.VirtualAccountName).ToArray()),
+                    ContentContainerName = "testcontainer"
+                }));
+
+            var configuration = new DeploymentIngesterConfiguration(
+                baseConfig,
+                storageTargetStore);
+
+            var ingester = new DeploymentIngester(
                 Context,
-                configuration: ingesterConfiguration,
-                sourceRoot: base.TestRootDirectoryPath / "src",
-                deploymentRoot: deploymentRoot,
-                deploymentConfigurationPath: base.TestRootDirectoryPath / "DeploymentConfiguration.json",
-                FileSystem,
-                dropExeFilePath: base.TestRootDirectoryPath / @"dropbin\drop.exe",
-                dropToken: DropToken);
+                configuration);
 
             // Write source files
             WriteFiles(ingester.SourceRoot, sources);
@@ -302,14 +308,17 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                     : drops[dropUrl];
             }
 
-            ingester.OverrideLaunchDropProcess = t =>
+            var dropHandler = new FuncDeploymentIngesterUrlHander(configuration, "TestDropHandler", t =>
             {
-                var dropContents = getDropContents(t.dropUrl, t.relativeRoot);
-                WriteFiles(new AbsolutePath(t.targetDirectory) / (t.relativeRoot ?? ""), dropContents);
-                return BoolResult.Success;
-            };
+                var dropContents = getDropContents(t.url.EffectiveUrl.ToString(), t.url.RelativeRoot);
+                AbsolutePath root = t.tempDirectory / (t.url.RelativeRoot ?? "");
+                WriteFiles(root, dropContents);
+                return Result.SuccessTask(root);
+            });
 
-            ingester.OverrideGetContainer = t =>
+            configuration.HandlerByScheme["https"] = dropHandler;
+
+            storageTargetStore.OverrideGetContainer = t =>
             {
                 return storageByAccountName[t.accountName].GetContainerAsync();
             };

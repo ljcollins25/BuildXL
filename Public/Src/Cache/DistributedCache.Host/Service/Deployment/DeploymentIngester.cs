@@ -64,7 +64,7 @@ namespace BuildXL.Cache.Host.Service
         /// <summary>
         /// Content store used to store files in content addressable layout under deployment root
         /// </summary>
-        private IDeploymentIngestorTargetStore Store { get; }
+        private IDeploymentIngestorTargetStore Store => Configuration.Store;
 
         private Tracer Tracer { get; } = new Tracer(nameof(DeploymentIngester));
 
@@ -259,6 +259,8 @@ namespace BuildXL.Cache.Host.Service
                 var manifestText = JsonUtilities.JsonSerialize(deploymentManifest, indent: true);
 
                 var path = DeploymentManifestPath;
+
+                FileSystem.CreateDirectory(DeploymentManifestPath.Parent);
 
                 // Write deployment manifest under deployment root for access by deployment service
                 // NOTE: This is done as two step process to ensure file is replaced atomically.
