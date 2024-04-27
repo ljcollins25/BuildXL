@@ -35,11 +35,6 @@ namespace BuildXL.Cache.Host.Service
         /// </summary>
         public static JsonSerializerOptions ConfigurationSerializationOptions => JsonUtilities.DefaultSerializationOptions;
 
-        private static MachineId ReadMachineId(ref Utf8JsonReader reader)
-        {
-            return new MachineId(reader.GetInt32());
-        }
-
         /// <summary>
         /// Special synthesized drop url for config files added by DeploymentRunner
         /// </summary>
@@ -118,7 +113,7 @@ namespace BuildXL.Cache.Host.Service
         public static AbsolutePath GetDeploymentConfigurationPath(AbsolutePath deploymentRoot, DeploymentManifest manifest)
         {
             var configFileSpec = manifest.GetDeploymentConfigurationSpec();
-            return deploymentRoot / GetContentRelativePath(new ContentHash(configFileSpec.Hash));
+            return deploymentRoot / GetContentRelativePath(configFileSpec.Hash);
         }
 
         /// <summary>

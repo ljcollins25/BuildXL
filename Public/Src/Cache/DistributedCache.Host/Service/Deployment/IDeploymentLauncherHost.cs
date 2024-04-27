@@ -4,6 +4,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 using BuildXL.Cache.ContentStore.Tracing.Internal;
@@ -25,6 +27,17 @@ namespace BuildXL.Cache.Host.Service
         /// Creates a client for communicating with deployment service
         /// </summary>
         IDeploymentServiceClient CreateServiceClient();
+    }
+
+    public interface IDeploymentServiceInnerClient : IDeploymentServiceClient
+    {
+        /// <summary>
+        /// Quickly query the change id which indicates if the result of <see cref="GetLaunchManifestAsync"/>
+        /// may have changed
+        /// </summary>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        Task<string> GetChangeIdAsync(OperationContext context, LauncherSettings settings);
     }
 
     /// <summary>

@@ -16,6 +16,7 @@ using BuildXL.Cache.ContentStore.Service;
 using BuildXL.Cache.ContentStore.Stores;
 using BuildXL.Cache.ContentStore.Tracing.Internal;
 using BuildXL.Cache.Host.Service;
+using BuildXL.Cache.Host.Service.Deployment;
 using CLAP;
 using ContentStore.Grpc;
 using Grpc.Core;
@@ -47,13 +48,15 @@ namespace BuildXL.Cache.ContentStore.App
 
                 var deploymentRunner = new DeploymentIngester(
                             context: new OperationContext(new Context(_logger)),
-                            sourceRoot: new AbsolutePath(sourceRoot),
-                            deploymentRoot: deploymentRoot,
-                            deploymentConfigurationPath: new AbsolutePath(deploymentConfigPath),
-                            fileSystem: _fileSystem,
-                            retentionSizeGb: retentionSizeGb,
-                            dropExeFilePath: new AbsolutePath(dropExePath),
-                            dropToken: dropToken
+                            configuration: new DeploymentIngesterConfiguration(
+                                SourceRoot: new AbsolutePath(sourceRoot),
+                                DeploymentRoot: deploymentRoot,
+                                DeploymentConfigurationPath: new AbsolutePath(deploymentConfigPath),
+                                FileSystem: _fileSystem,
+                                RetentionSizeGb: retentionSizeGb)
+                            .PopulateDefaultHandlers(
+                                dropExeFilePath: new AbsolutePath(dropExePath),
+                                dropToken: dropToken)
                             );
 
                 deploymentRunner.RunAsync().GetAwaiter().GetResult().ThrowIfFailure();

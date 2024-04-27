@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Collections.Generic;
+using BuildXL.Cache.ContentStore.Hashing;
 
 #nullable disable
 
@@ -26,7 +27,7 @@ namespace BuildXL.Cache.Host.Configuration
             /// <summary>
             /// The hash of the file
             /// </summary>
-            public string Hash { get; set; }
+            public ContentHash Hash { get; set; }
 
             /// <summary>
             /// The size of the file
@@ -45,6 +46,10 @@ namespace BuildXL.Cache.Host.Configuration
         /// </summary>
         public class LayoutSpec : Dictionary<string, FileSpec>
         {
+            public override string ToString()
+            {
+                return $"Count = {Count}";
+            }
         }
     }
 }

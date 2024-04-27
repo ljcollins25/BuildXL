@@ -54,7 +54,7 @@ namespace BuildXL.Launcher.Server.Controllers
 
         [HttpPost]
         [Route("getproxyaddress")]
-         public ActionResult GetProxyAddress(string contextId, string accessToken, [FromBody] HostParameters parameters)
+         public async Task<ActionResult> GetProxyAddress(string contextId, string accessToken, [FromBody] HostParameters parameters)
         {
             OperationContext context = new OperationContext(new Context(contextId, _logger));
 
@@ -64,7 +64,7 @@ namespace BuildXL.Launcher.Server.Controllers
                 return Unauthorized();
             }
 
-            return Ok(_service.GetProxyBaseAddress(context, parameters));
+            return Ok(await _service.GetProxyBaseAddress(context, parameters));
         }
 
         [HttpGet]

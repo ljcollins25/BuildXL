@@ -20,6 +20,7 @@ namespace Configuration {
             ...importFrom("BuildXL.Cache.ContentStore").getSystemTextJson(true),
             importFrom("BuildXL.Cache.ContentStore").Interfaces.dll,
             importFrom("BuildXL.Cache.ContentStore").Grpc.dll,
+            importFrom("BuildXL.Cache.ContentStore").Hashing.dll,
         ],
         skipDocumentationGeneration: true,
 

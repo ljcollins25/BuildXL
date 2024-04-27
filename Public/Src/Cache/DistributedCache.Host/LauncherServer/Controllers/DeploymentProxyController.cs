@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Mime;
 using System.Threading.Tasks;
+using BuildXL.Cache.ContentStore.Hashing;
 using BuildXL.Cache.ContentStore.Interfaces.Logging;
 using BuildXL.Cache.ContentStore.Interfaces.Tracing;
 using BuildXL.Cache.ContentStore.Stores;
@@ -35,7 +36,7 @@ namespace BuildXL.Launcher.Server.Controllers
         {
             OperationContext context = new OperationContext(new Context(contextId, _logger));
 
-            var stream = await _service.GetContentAsync(context, hash, accessToken);
+            var stream = await _service.GetContentAsync(context, new ContentHash(hash), accessToken);
             return File(stream, MediaTypeNames.Application.Octet);
         }
     }

@@ -10,7 +10,7 @@ namespace BuildXL.Cache.Host.Configuration
     /// <summary>
     /// Describes settings used by launcher application
     /// </summary>
-    public class LauncherApplicationSettings : LauncherSettings
+    public record LauncherApplicationSettings : LauncherSettings
     {
         /// <summary>
         /// Configure the logging behavior for the service

@@ -40,6 +40,7 @@ using Xunit;
 using Xunit.Abstractions;
 using AbsolutePath = BuildXL.Cache.ContentStore.Interfaces.FileSystem.AbsolutePath;
 using RelativePath = BuildXL.Cache.ContentStore.Interfaces.FileSystem.RelativePath;
+using BuildXL.Cache.ContentStore.Distributed.Utilities;
 
 namespace BuildXL.Cache.ContentStore.Distributed.Test
 {
@@ -316,7 +317,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             await ingester.RunAsync().ShouldBeSuccess();
 
             var manifestText = FileSystem.ReadAllText(ingester.DeploymentManifestPath);
-            var deploymentManifest = JsonSerializer.Deserialize<DeploymentManifest>(manifestText);
+            var deploymentManifest = JsonUtilities.JsonDeserialize<DeploymentManifest>(manifestText);
 
             foreach (var drop in drops)
             {
@@ -326,7 +327,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                 layoutSpec.Count.Should().Be(expectedDropContents.Count);
                 foreach (var fileAndContent in expectedDropContents)
                 {
-                    var hash = new ContentHash(layoutSpec[fileAndContent.Key].Hash);
+                    var hash = layoutSpec[fileAndContent.Key].Hash;
                     var expectedPath = ingester.DeploymentRoot / DeploymentUtilities.GetContentRelativePath(hash);
 
                     foreach (var account in storageByAccountName.Values)

@@ -16,12 +16,12 @@ namespace BuildXL.Cache.Host.Service
     /// <summary>
     /// Host class for providing ability to launch processes and contact deployment service
     /// </summary>
-    public class DeploymentLauncherHost : IDeploymentLauncherHost
+    public class DeploymentLauncherHost(IDeploymentServiceInnerClient innerClient = null) : IDeploymentLauncherHost
     {
         /// <nodoc />
         public static DeploymentLauncherHost Instance { get; } = new DeploymentLauncherHost();
 
-        private readonly IDeploymentServiceClient _client = new DeploymentServiceClient();
+        private readonly IDeploymentServiceClient _client = new DeploymentServiceClient(innerClient ?? new DeploymentServiceInnerClient());
 
         /// <inheritdoc />
         public ILauncherProcess CreateProcess(ProcessStartInfo info)
@@ -35,10 +35,8 @@ namespace BuildXL.Cache.Host.Service
             return _client;
         }
 
-        private class DeploymentServiceClient : IDeploymentServiceClient
+        private class DeploymentServiceClient(IDeploymentServiceInnerClient client) : IDeploymentServiceClient
         {
-            private readonly HttpClient _client = new HttpClient();
-
             private LauncherManifest _lastManifest;
 
             public async Task<LauncherManifest> GetLaunchManifestAsync(OperationContext context, LauncherSettings settings)
@@ -60,7 +58,7 @@ namespace BuildXL.Cache.Host.Service
                     // deployment manifest has not changed then, launcher manifest which is derived from it
                     // also has not changed, so just return prior launcher manifest in that case. This avoids
                     // a lot of unnecessary computation on the server.
-                    string newChangeId = await _client.GetStringAsync($"{settings.ServiceUrl}/deploymentChangeId");
+                    string newChangeId = await client.GetChangeIdAsync(context, settings);
                     var lastManifest = _lastManifest;
                     if (lastManifest?.DeploymentManifestChangeId == newChangeId)
                     {
@@ -69,8 +67,7 @@ namespace BuildXL.Cache.Host.Service
                 }
 
                 // Query for launcher manifest from remote service
-                var content = await PostJsonAsync(context, $"{settings.ServiceUrl}/deployment", settings.DeploymentParameters);
-                var manifest = JsonSerializer.Deserialize<LauncherManifest>(content, DeploymentUtilities.ConfigurationSerializationOptions);
+                var manifest = await client.GetLaunchManifestAsync(context, settings);
 
                 if (manifest.IsComplete)
                 {
@@ -88,6 +85,39 @@ namespace BuildXL.Cache.Host.Service
             public Task<Stream> GetStreamAsync(OperationContext context, string downloadUrl)
             {
                 // TODO: retry?
+                return client.GetStreamAsync(context, downloadUrl);
+            }
+
+            public Task<string> GetProxyBaseAddress(OperationContext context, string serviceUrl, HostParameters parameters, string token)
+            {
+                return client.GetProxyBaseAddress(context, serviceUrl, parameters, token);
+            }
+
+            public void Dispose()
+            {
+                client.Dispose();
+            }
+        }
+
+        public class DeploymentServiceInnerClient : IDeploymentServiceInnerClient
+        {
+            private readonly HttpClient _client = new HttpClient();
+
+            public Task<string> GetChangeIdAsync(OperationContext context, LauncherSettings settings)
+            {
+                return _client.GetStringAsync($"{settings.ServiceUrl}/deploymentChangeId");
+            }
+
+            public async Task<LauncherManifest> GetLaunchManifestAsync(OperationContext context, LauncherSettings settings)
+            {
+                var content = await PostJsonAsync(context, $"{settings.ServiceUrl}/deployment", settings.DeploymentParameters);
+                var manifest = JsonSerializer.Deserialize<LauncherManifest>(content, DeploymentUtilities.ConfigurationSerializationOptions);
+                return manifest;
+            }
+
+            public Task<Stream> GetStreamAsync(OperationContext context, string downloadUrl)
+            {
+                // TODO: retry?
                 return _client.GetStreamAsync(downloadUrl);
             }
 
@@ -96,7 +126,7 @@ namespace BuildXL.Cache.Host.Service
                 return PostJsonAsync(context, GetProxyBaseAddressQueryUrl(context, serviceUrl, token), parameters);
             }
 
-            internal static string GetProxyBaseAddressQueryUrl(OperationContext context, string baseAddress, string accessToken)
+            private static string GetProxyBaseAddressQueryUrl(OperationContext context, string baseAddress, string accessToken)
             {
                 static string escape(string value) => Uri.EscapeDataString(value);
 

@@ -309,7 +309,7 @@ namespace BuildXL.Cache.Host.Service
 
         private static List<ContentHash> GetManifestHashes(LauncherManifest manifest)
         {
-            return manifest.Deployment.Select(f => new ContentHash(f.Value.Hash)).Distinct().ToList();
+            return manifest.Deployment.Select(f => f.Value.Hash).Distinct().ToList();
         }
 
         private ManifestFilesExistence CheckManifestReferencedFileExistence(LauncherManifest manifest)
@@ -380,7 +380,7 @@ namespace BuildXL.Cache.Host.Service
                         var count = filesByHash.Count();
 
                         context.Token.ThrowIfCancellationRequested();
-                        var hash = new ContentHash(filesByHash.Key);
+                        var hash = filesByHash.Key;
                         if (pinContext.Contains(hash))
                         {
                             return Result.Success(0);
@@ -440,7 +440,7 @@ namespace BuildXL.Cache.Host.Service
                             Tracer,
                             async () =>
                             {
-                                var hash = new ContentHash(fileInfo.Hash);
+                                var hash = fileInfo.Hash;
 
                                 // Copy the file to additional deployment locations
                                 await Store.PlaceFileAsync(
@@ -478,7 +478,7 @@ namespace BuildXL.Cache.Host.Service
             {
                 try
                 {
-                    var hash = new ContentHash(fileInfo.Hash);
+                    var hash = fileInfo.Hash;
 
                     using (var downloadStream = await client.GetStreamAsync(context, fileInfo.DownloadUrl))
                     {
@@ -553,7 +553,15 @@ namespace BuildXL.Cache.Host.Service
 
             private string NormalizeFilePath(string path)
             {
+#if NET8_0_OR_GREATER
+                Span<char> pathChars = stackalloc char[path.Length];
+                pathChars.Replace('\\', '/');
+                pathChars.Trim();
+                pathChars.TrimStart('/');
+                return pathChars.ToString();
+#else
                 return path.Replace("\\", "/").Trim().TrimStart('/');
+#endif
             }
 
             private string Normalize(LauncherManifest manifest)
@@ -583,6 +591,11 @@ namespace BuildXL.Cache.Host.Service
             /// </summary>
             public bool HasOnlyWatchedFileUpdates(LauncherManifest newManifest)
             {
+                if (newManifest.Tool.WatchedFiles.Count == 0)
+                {
+                    return false;
+                }
+
                 var normalizedToolManifest = Normalize(Manifest);
                 var normalizedNewManifest = Normalize(newManifest);
                 return normalizedNewManifest == normalizedToolManifest;

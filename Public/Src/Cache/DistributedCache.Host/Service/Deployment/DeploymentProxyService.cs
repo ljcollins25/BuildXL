@@ -40,7 +40,7 @@ namespace BuildXL.Cache.Host.Service
         /// <summary>
         /// Map for getting expirable sas urls by storage account and hash 
         /// </summary>
-        private VolatileMap<(string hash, string token), AsyncLazy<BoolResult>> ContentCacheRequests { get; }
+        private VolatileMap<(ContentHash hash, string token), AsyncLazy<BoolResult>> ContentCacheRequests { get; }
 
         private VolatileMap<UnitValue, AsyncLazy<string>> ProxyAddress { get; }
 
@@ -68,7 +68,7 @@ namespace BuildXL.Cache.Host.Service
             Configuration = configuration;
             Root = new AbsolutePath(configuration.RootPath);
             Clock = clock;
-            ContentCacheRequests = new VolatileMap<(string, string), AsyncLazy<BoolResult>>(Clock);
+            ContentCacheRequests = new(Clock);
             ProxyAddress = new VolatileMap<UnitValue, AsyncLazy<string>>(Clock);
             Client = client ?? DeploymentLauncherHost.Instance.CreateServiceClient();
             HostParameters = hostParameters;
@@ -100,26 +100,25 @@ namespace BuildXL.Cache.Host.Service
             return success;
         }
 
-        internal static string GetContentUrl(Context context, string baseAddress, string hash, string accessToken)
+        internal static string GetContentUrl(Context context, string baseAddress, ContentHash hash, string accessToken)
         {
             static string escape(string value) => Uri.EscapeDataString(value);
 
-            return $"{baseAddress.TrimEnd('/')}/content?contextId={escape(context.TraceId)}&hash={escape(hash)}&accessToken={escape(accessToken)}";
+            return $"{baseAddress.TrimEnd('/')}/content?contextId={escape(context.TraceId)}&hash={escape(hash.ToString())}&accessToken={escape(accessToken)}";
         }
 
-        public Task<Stream> GetContentAsync(OperationContext context, string hash, string accessToken)
+        public Task<Stream> GetContentAsync(OperationContext context, ContentHash hash, string accessToken)
         {
             long length = 0;
             return context.PerformOperationAsync(
                 Tracer,
                 async () =>
                 {
-                    var contentHash = new ContentHash(hash);
-                    var openResult = await Store.OpenStreamAsync(context, contentHash, pinRequest: null);
+                    var openResult = await Store.OpenStreamAsync(context, hash, pinRequest: null);
                     if (openResult.Code == OpenStreamResult.ResultCode.ContentNotFound)
                     {
                         await EnsureContentLocalAsync(context, hash, accessToken);
-                        openResult = await Store.OpenStreamAsync(context, contentHash, pinRequest: null).ThrowIfFailure();
+                        openResult = await Store.OpenStreamAsync(context, hash, pinRequest: null).ThrowIfFailure();
                     }
                     else
                     {
@@ -159,7 +158,7 @@ namespace BuildXL.Cache.Host.Service
         /// <summary>
         /// Ensures the requested content is cached locally
         /// </summary>
-        private async Task EnsureContentLocalAsync(OperationContext context, string hash, string token)
+        private async Task EnsureContentLocalAsync(OperationContext context, ContentHash hash, string token)
         {
             var proxyBaseAddress = await GetProxyBaseAddressAsync(context, token);
 
@@ -177,12 +176,11 @@ namespace BuildXL.Cache.Host.Service
                             Tracer,
                             async innerContext =>
                             {
-                                var contentHash = new ContentHash(hash);
                                 var url = GetContentUrl(innerContext, proxyBaseAddress, hash, token);
                                 var stream = await Client.GetStreamAsync(innerContext, url);
 
                                 // Cache the content in local store and return stream from local store
-                                return await Store.PutStreamAsync(innerContext, stream, contentHash, pinRequest: null).ThrowIfFailure();
+                                return await Store.PutStreamAsync(innerContext, stream, hash, pinRequest: null).ThrowIfFailure();
                             },
                             extraStartMessage: $"Hash={hash} BaseAddress={proxyBaseAddress}",
                             extraEndMessage: r => $"Hash={hash} Size={r.ContentSize} BaseAddress={proxyBaseAddress}",

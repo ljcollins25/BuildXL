@@ -25,6 +25,7 @@ using BuildXL.Utilities.Collections;
 using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
+using BuildXL.Cache.ContentStore.Distributed.Utilities;
 
 namespace BuildXL.Cache.Host.Service.Deployment
 {
@@ -275,7 +276,7 @@ namespace BuildXL.Cache.Host.Service.Deployment
                 foreach (var relativeRoot in relativeRoots)
                 {
                     dropConfiguration.RelativeRoot = relativeRoot;
-                    yield return dropConfiguration.EffectiveUrl;
+                    yield return dropConfiguration.Url;
                 }
             }
 
@@ -301,10 +302,7 @@ namespace BuildXL.Cache.Host.Service.Deployment
         {
             return Context.PerformOperationAsync(Tracer, async () =>
             {
-                var manifestText = JsonSerializer.Serialize(newManifest, new JsonSerializerOptions()
-                {
-                    WriteIndented = true
-                });
+                var manifestText = JsonSerializer.Serialize(newManifest, JsonUtilities.IndentedSerializationOptions);
 
                 FileSystem.CreateDirectory(DeploymentManifestPath.Parent);
                 FileSystem.WriteAllText(DeploymentManifestPath, manifestText);
@@ -340,7 +338,7 @@ namespace BuildXL.Cache.Host.Service.Deployment
                 }
 
                 var previousManifestContent = await blob.DownloadContentAsync();
-                var previousManifest = JsonSerializer.Deserialize<DeploymentManifest>(previousManifestContent.Value.Content.ToString());
+                var previousManifest = JsonUtilities.JsonDeserialize<DeploymentManifest>(previousManifestContent.Value.Content.ToString());
 
                 return Result.Success(previousManifest);
             },
@@ -402,7 +400,7 @@ namespace BuildXL.Cache.Host.Service.Deployment
                 file.Md5ChecksumForBlob = ContentHashingHelper.HashFile(file.SourcePath.ToString(), HashType.MD5);
                 lock (layoutSpec)
                 {
-                    layoutSpec[file.TargetDeploymentPath.ToString()] = new DeploymentManifest.FileSpec { Hash = file.Hash.ToString(), Size = file.Size };
+                    layoutSpec[file.TargetDeploymentPath.ToString()] = new DeploymentManifest.FileSpec { Hash = file.Hash, Size = file.Size };
                 }
 
                 return Task.CompletedTask;

@@ -40,6 +40,11 @@ namespace BuildXL.Cache.ContentStore.Interfaces.Results
         /// </summary>
         public static Task<Result> SuccessTask() => _successTask;
 
+        /// <summary>
+        /// Returns an instance for a successful operation as a task.
+        /// </summary>
+        public static Task<Result<T>> SuccessTask<T>(T result, bool isNullAllowed = false) => Task.FromResult(Success(result, isNullAllowed));
+
         /// <nodoc />
         public static Result<T> FromError<T>(ResultBase other)
         {

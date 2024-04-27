@@ -75,7 +75,8 @@ namespace BuildXL.Cache.Host.Configuration
         /// file://MyEnvironment/CacheConfiguration.json
         /// file://MyEnvironment/
         /// </summary>
-        public string Url { get; set; }
+        public string Url { get => _url ?? (BaseUrl != null ? $"{BaseUrl}{UrlSuffix ?? ""}" : null); set => _url = value; }
+        private string _url;
 
         /// <summary>
         /// The base url used to download the drop. This is only valid when combined with <see cref="RelativeRoot"/>
@@ -85,13 +86,9 @@ namespace BuildXL.Cache.Host.Configuration
         /// <summary>
         /// The root directory under a provided drop to use. This is only valid when combined with <see cref="BaseUrl"/>
         /// </summary>
-        public string RelativeRoot { get; set; }
+        public string RelativeRoot { set => UrlSuffix = $"?root={value}"; }
 
-        /// <summary>
-        /// Gets the effective url used based on the values set for <see cref="Url"/>, <see cref="BaseUrl"/>, <see cref="RelativeRoot"/>.
-        /// NOTE: <see cref="Url"/> takes precedence.
-        /// </summary>
-        public string EffectiveUrl => Url ?? (BaseUrl != null && RelativeRoot != null ? $"{BaseUrl}?root={RelativeRoot}" : null);
+        public string UrlSuffix { get; set; }
 
         /// <summary>
         /// Defines target folder under which deployment files should be placed.

@@ -35,6 +35,8 @@ using Xunit;
 using Xunit.Abstractions;
 using AbsolutePath = BuildXL.Cache.ContentStore.Interfaces.FileSystem.AbsolutePath;
 using RelativePath = BuildXL.Cache.ContentStore.Interfaces.FileSystem.RelativePath;
+using BuildXL.Cache.Host.Service.Deployment;
+using BuildXL.Cache.ContentStore.Distributed.Utilities;
 
 namespace BuildXL.Cache.ContentStore.Distributed.Test
 {
@@ -192,15 +194,19 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             };
 
             var deploymentRoot = TestRootDirectoryPath / "deploy";
+            var configuration = new DeploymentIngesterConfiguration(
+                SourceRoot: base.TestRootDirectoryPath / "src",
+                DeploymentRoot: deploymentRoot,
+                DeploymentConfigurationPath: base.TestRootDirectoryPath / "DeploymentConfiguration.json",
+                FileSystem,
+                //DropExeFilePath: base.TestRootDirectoryPath / @"dropbin\drop.exe",
+                RetentionSizeGb: 1
+                //dropToken: DropToken
+            );
+
             var ingester = new DeploymentIngester(
                 Context,
-                sourceRoot: base.TestRootDirectoryPath / "src",
-                deploymentRoot: deploymentRoot,
-                deploymentConfigurationPath: base.TestRootDirectoryPath / "DeploymentConfiguration.json",
-                FileSystem,
-                dropExeFilePath: base.TestRootDirectoryPath / @"dropbin\drop.exe",
-                retentionSizeGb: 1,
-                dropToken: DropToken);
+                configuration);
 
             // Write source files
             WriteFiles(ingester.SourceRoot, sources);
@@ -223,17 +229,20 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                     : drops[dropUrl];
             }
 
-            ingester.OverrideLaunchDropProcess = t =>
+            var dropHandler = new FuncDeploymentIngesterUrlHander(configuration, "TestDropHandler", t =>
             {
-                var dropContents = getDropContents(t.dropUrl, t.relativeRoot);
-                WriteFiles(new AbsolutePath(t.targetDirectory) / (t.relativeRoot ?? ""), dropContents);
-                return BoolResult.Success;
-            };
+                var dropContents = getDropContents(t.url.EffectiveUrl.ToString(), t.url.RelativeRoot);
+                AbsolutePath root = t.tempDirectory / (t.url.RelativeRoot ?? "");
+                WriteFiles(root, dropContents);
+                return Result.SuccessTask(root);
+            });
+
+            configuration.HandlerByScheme["https"] = dropHandler;
 
             await ingester.RunAsync().ShouldBeSuccess();
 
             var manifestText = FileSystem.ReadAllText(ingester.DeploymentManifestPath);
-            var deploymentManifest = JsonSerializer.Deserialize<DeploymentManifest>(manifestText);
+            var deploymentManifest = JsonUtilities.JsonDeserialize<DeploymentManifest>(manifestText);
 
             foreach (var drop in drops)
             {
@@ -243,7 +252,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                 layoutSpec.Count.Should().Be(expectedDropContents.Count);
                 foreach (var fileAndContent in expectedDropContents)
                 {
-                    var hash = new ContentHash(layoutSpec[fileAndContent.Key].Hash);
+                    var hash = layoutSpec[fileAndContent.Key].Hash;
                     var expectedPath = ingester.DeploymentRoot / DeploymentUtilities.GetContentRelativePath(hash);
 
                     var text = FileSystem.ReadAllText(expectedPath);
@@ -296,16 +305,16 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             {
                 var launchManifest = await deploymentService.UploadFilesAndGetManifestAsync(Context, parameters, waitForCompletion: true);
 
-                var expectedDeploymentPathToHashMap = new Dictionary<string, string>();
+                var expectedDeploymentPathToHashMap = new Dictionary<string, ContentHash>();
 
                 launchManifest.Drops.Count.Should().Be(expectedDrops.Count);
                 foreach (var drop in launchManifest.Drops)
                 {
                     var targetRelativePath = drop.TargetRelativePath ?? string.Empty;
-                    expectedDrops.Should().Contain((targetRelativePath, drop.EffectiveUrl));
+                    expectedDrops.Should().Contain((targetRelativePath, drop.Url));
 
-                    var dropSpec = deploymentManifest.Drops[drop.EffectiveUrl];
-                    foreach (var dropFile in getDropContents(drop.EffectiveUrl))
+                    var dropSpec = deploymentManifest.Drops[drop.Url];
+                    foreach (var dropFile in getDropContents(drop.Url))
                     {
                         expectedDeploymentPathToHashMap[Path.Combine(targetRelativePath, dropFile.Key)] = dropSpec[dropFile.Key].Hash;
                     }

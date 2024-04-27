@@ -57,6 +57,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Utilities
                     new StringConvertibleSettingJsonConverterFactory(),
                     new BoolJsonConverter(),
                     new JsonStringEnumConverter(),
+                    FuncJsonConverter.Create(ReadContentHash, (writer, value) => writer.WriteStringValue(value.HashType == HashType.Unknown ? null : value.ToString())),
                     FuncJsonConverter.Create(ReadMachineId, (writer, value) => writer.WriteNumberValue(value.Index)),
                     FuncJsonConverter.Create(ReadShortHash, (writer, value) => writer.WriteStringValue(value.HashType == HashType.Unknown ? null : value.ToString())),
                     FuncJsonConverter.Create(ReadShardHash, (writer, value) => writer.WriteStringValue(value.ToShortHash().HashType == HashType.Unknown ? null : value.ToShortHash().ToString())),
@@ -65,6 +66,18 @@ namespace BuildXL.Cache.ContentStore.Distributed.Utilities
                 }
             };
             return result;
+        }
+
+        private static ContentHash ReadContentHash(ref Utf8JsonReader reader)
+        {
+            if (reader.TokenType == JsonTokenType.StartObject)
+            {
+                reader.Skip();
+                return default;
+            }
+
+            var data = reader.GetString();
+            return data == null ? default : new ContentHash(data);
         }
 
         private static MachineId ReadMachineId(ref Utf8JsonReader reader)

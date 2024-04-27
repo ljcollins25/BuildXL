@@ -10,6 +10,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Web;
+using BuildXL.Cache.ContentStore.Distributed.Utilities;
 using BuildXL.Cache.ContentStore.Hashing;
 using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 using BuildXL.Cache.ContentStore.Interfaces.Results;
@@ -19,6 +20,7 @@ using BuildXL.Cache.ContentStore.Stores;
 using BuildXL.Cache.ContentStore.Tracing;
 using BuildXL.Cache.ContentStore.Tracing.Internal;
 using BuildXL.Cache.Host.Configuration;
+using BuildXL.Cache.Host.Service.Deployment;
 using BuildXL.Utilities.ParallelAlgorithms;
 
 namespace BuildXL.Cache.Host.Service
@@ -34,12 +36,12 @@ namespace BuildXL.Cache.Host.Service
         /// <summary>
         /// The deployment root directory under which CAS and deployment manifests will be stored
         /// </summary>
-        public AbsolutePath DeploymentRoot { get; }
+        public AbsolutePath DeploymentRoot => Configuration.DeploymentRoot;
 
         /// <summary>
         /// The path to the configuration file describing urls of deployed drops/files
         /// </summary>
-        public AbsolutePath DeploymentConfigurationPath { get; }
+        public AbsolutePath DeploymentConfigurationPath => Configuration.DeploymentConfigurationPath;
 
         /// <summary>
         /// The path to the manifest file describing contents of deployed drops/files
@@ -49,23 +51,13 @@ namespace BuildXL.Cache.Host.Service
         /// <summary>
         /// The path to the source root from while files should be pulled
         /// </summary>
-        public AbsolutePath SourceRoot { get; }
-
-        /// <summary>
-        /// The path to drop.exe used to download drops
-        /// </summary>
-        public AbsolutePath DropExeFilePath { get; }
-
-        /// <summary>
-        /// The personal access token used to deploy drop files
-        /// </summary>
-        private string DropToken { get; }
+        public AbsolutePath SourceRoot => Configuration.SourceRoot;
 
         #endregion
 
         private OperationContext Context { get; }
 
-        private IAbsFileSystem FileSystem { get; }
+        private IAbsFileSystem FileSystem => Configuration.FileSystem;
 
         private PinRequest PinRequest { get; set; }
 
@@ -92,40 +84,33 @@ namespace BuildXL.Cache.Host.Service
         /// </summary>
         public Func<(string exePath, string args, string dropUrl, string targetDirectory, string relativeRoot), BoolResult> OverrideLaunchDropProcess { get; set; }
 
+        private DeploymentIngesterConfiguration Configuration { get; }
+
         /// <nodoc />
         public DeploymentIngester(
             OperationContext context,
-            AbsolutePath sourceRoot,
-            AbsolutePath deploymentRoot,
-            AbsolutePath deploymentConfigurationPath,
-            IAbsFileSystem fileSystem,
-            AbsolutePath dropExeFilePath,
-            int retentionSizeGb,
-            string dropToken)
+            DeploymentIngesterConfiguration configuration)
         {
             Context = context;
-            SourceRoot = sourceRoot;
-            DeploymentConfigurationPath = deploymentConfigurationPath;
-            DeploymentRoot = deploymentRoot;
+            Configuration = configuration;
+            var deploymentRoot = Configuration.DeploymentRoot;
             DeploymentManifestPath = DeploymentUtilities.GetDeploymentManifestPath(deploymentRoot);
             Store = new FileSystemContentStoreInternal(
-                fileSystem,
+                configuration.FileSystem,
                 SystemClock.Instance,
                 DeploymentUtilities.GetCasRootPath(deploymentRoot),
-                new ConfigurationModel(new ContentStoreConfiguration(new MaxSizeQuota($"{retentionSizeGb}GB"))),
+                new ConfigurationModel(new ContentStoreConfiguration(new MaxSizeQuota($"{configuration.RetentionSizeGb}GB"))),
                 settings: new ContentStoreSettings()
-                          {
-                              TraceFileSystemContentStoreDiagnosticMessages = true,
-                              CheckFiles = false,
+                {
+                    TraceFileSystemContentStoreDiagnosticMessages = true,
+                    CheckFiles = false,
 
-                              // Disable empty file shortcuts to ensure all content is always placed on disk
-                              UseEmptyContentShortcut = false
-                          });
-            FileSystem = fileSystem;
-            DropExeFilePath = dropExeFilePath;
-            DropToken = dropToken;
+                    // Disable empty file shortcuts to ensure all content is always placed on disk
+                    UseEmptyContentShortcut = false
+                });
 
             ActionQueue = new ActionQueue(Environment.ProcessorCount);
+            configuration.TryPopulateDefaultHandlers();
         }
 
         /// <summary>
@@ -146,13 +131,25 @@ namespace BuildXL.Cache.Host.Service
         private class DropLayout
         {
             public string Url { get; set; }
-            public Uri ParsedUrl { get; set; }
+            public Uri Uri { get; set; }
+
+            public ParsedDropUrl ParsedUrl { get; set; }
 
             public List<FileSpec> Files { get; } = new List<FileSpec>();
 
+            public string ToHeaderString()
+            {
+                if (ParsedUrl?.EffectiveUrl == null)
+                {
+                    return $"Url={Url}";
+                }
+
+                return $"Url={Url} EffectiveUrl={ParsedUrl?.EffectiveUrl}";
+            }
+
             public override string ToString()
             {
-                return $"Url={Url} FileCount={Files.Count}";
+                return $"{ToHeaderString()} FileCount={Files.Count}";
             }
         }
 
@@ -240,7 +237,7 @@ namespace BuildXL.Cache.Host.Service
                 foreach (var relativeRoot in relativeRoots)
                 {
                     dropConfiguration.RelativeRoot = relativeRoot;
-                    yield return dropConfiguration.EffectiveUrl;
+                    yield return dropConfiguration.Url;
                 }
             }
 
@@ -255,7 +252,7 @@ namespace BuildXL.Cache.Host.Service
             return new DropLayout()
             {
                 Url = url,
-                ParsedUrl = new Uri(url)
+                Uri = new Uri(url)
             };
         }
 
@@ -274,7 +271,7 @@ namespace BuildXL.Cache.Host.Service
                     {
                         layout[file.Path] = new DeploymentManifest.FileSpec()
                         {
-                            Hash = file.Hash.Serialize(),
+                            Hash = file.Hash,
                             Size = file.Size
                         };
                     }
@@ -282,10 +279,7 @@ namespace BuildXL.Cache.Host.Service
                     deploymentManifest.Drops[drop.Url] = layout;
                 }
 
-                var manifestText = JsonSerializer.Serialize(deploymentManifest, new JsonSerializerOptions()
-                {
-                    WriteIndented = true
-                });
+                var manifestText = JsonSerializer.Serialize(deploymentManifest, JsonUtilities.IndentedSerializationOptions);
 
                 var path = DeploymentManifestPath;
 
@@ -322,7 +316,7 @@ namespace BuildXL.Cache.Host.Service
                 }
 
                 var manifestText = FileSystem.ReadAllText(DeploymentManifestPath);
-                var deploymentManifest = JsonSerializer.Deserialize<DeploymentManifest>(manifestText);
+                var deploymentManifest = DeploymentUtilities.JsonDeserialize<DeploymentManifest>(manifestText);
 
                 foundDrops = deploymentManifest.Drops.Count;
                 foreach (var dropEntry in deploymentManifest.Drops)
@@ -335,7 +329,7 @@ namespace BuildXL.Cache.Host.Service
                             layout.Files.Add(new FileSpec()
                             {
                                 Path = fileEntry.Key,
-                                Hash = new ContentHash(fileSpec.Hash),
+                                Hash = fileSpec.Hash,
                                 Size = fileSpec.Size,
                             });
                         }
@@ -390,8 +384,16 @@ namespace BuildXL.Cache.Host.Service
             var context = Context.CreateNested(Tracer.Name);
             return context.PerformOperationAsync<BoolResult>(Tracer, async () =>
             {
-                // Can't skip local file drops (including config drop) since file system is mutable
-                if (!drop.ParsedUrl.IsFile && drop.ParsedUrl != DeploymentUtilities.ConfigDropUri)
+                if (!Configuration.HandlerByScheme.TryGetValue(drop.Uri.Scheme, out var handler))
+                {
+                    return new BoolResult($"No handler for uri scheme: {drop.Uri.Scheme}");
+                }
+
+                 drop.ParsedUrl = handler.Parse(drop.Uri);
+
+                // Can't skip mutable drops (i.e. normal local file drops) since the contents may have
+                // changes from last ingestion
+                if (!drop.ParsedUrl.HasMutableContent)
                 {
                     if (drop.Files.Count != 0 && drop.Files.All(f => PinHashes.Contains(f.Hash)))
                     {
@@ -404,14 +406,14 @@ namespace BuildXL.Cache.Host.Service
                 drop.Files.Clear();
 
                 // Download and enumerate files associated with drop
-                var files = DownloadDrop(context, drop);
+                var files = await DownloadDropAsync(context, drop);
 
                 // Add file specs to drop
                 foreach (var file in files)
                 {
                     drop.Files.Add(new FileSpec()
                     {
-                        Path = file.path.ToString()
+                        Path = file.DeployedPath.ToString()
                     });
                 }
 
@@ -427,15 +429,15 @@ namespace BuildXL.Cache.Host.Service
             extraEndMessage: r => drop.ToString()).ThrowIfFailure<BoolResult>();
         }
 
-        private Task DeployFileAsync(DropLayout drop, (RelativePath path, AbsolutePath fullPath) file, int index, OperationContext context)
+        private Task DeployFileAsync(DropLayout drop, DeploymentFile file, int index, OperationContext context)
         {
             return context.PerformOperationAsync(Tracer, async () =>
             {
                 // Hash file before put to prevent copying file in common case where it is already in the cache
-                var hashResult = await Store.TryHashFileAsync(context, file.fullPath, HashType.MD5);
-                Contract.Assert(hashResult != null, $"Missing file '{file.fullPath}'");
+                var hashResult = await Store.TryHashFileAsync(context, file.SourcePath, HashType.MD5);
+                Contract.Assert(hashResult != null, $"Missing file '{file.SourcePath}'");
 
-                var result = await Store.PutFileAsync(context, file.fullPath, FileRealizationMode.Copy, hashResult.Value.Hash, PinRequest).ThrowIfFailure();
+                var result = await Store.PutFileAsync(context, file.SourcePath, FileRealizationMode.Copy, hashResult.Value.Hash, PinRequest).ThrowIfFailure();
 
                 var spec = drop.Files[index];
                 spec.Hash = result.ContentHash;
@@ -448,8 +450,8 @@ namespace BuildXL.Cache.Host.Service
                 return result;
             },
             traceOperationStarted: true,
-            extraStartMessage: $"Path={file.fullPath}",
-            extraEndMessage: r => $"Path={file.fullPath}"
+            extraStartMessage: $"Path={file.SourcePath}",
+            extraEndMessage: r => $"Path={file.SourcePath}"
             ).ThrowIfFailureAsync();
         }
 
@@ -465,108 +467,23 @@ namespace BuildXL.Cache.Host.Service
             }
         }
 
-        private IReadOnlyList<(RelativePath path, AbsolutePath fullPath)> DownloadDrop(OperationContext context, DropLayout drop)
+        private Task<IReadOnlyList<DeploymentFile>> DownloadDropAsync(OperationContext context, DropLayout drop)
         {
-            return context.PerformOperation(Tracer, () =>
+            var url = drop.ParsedUrl;
+            return context.PerformOperationAsync(Tracer, async () =>
             {
-                var files = new List<(RelativePath path, AbsolutePath fullPath)>();
+                var files = new List<DeploymentFile>();
 
-                if (drop.ParsedUrl == DeploymentUtilities.ConfigDropUri)
-                {
-                    files.Add((new RelativePath(DeploymentUtilities.DeploymentConfigurationFileName), DeploymentConfigurationPath));
-                }
-                else if (drop.ParsedUrl.IsFile)
-                {
-                    var path = SourceRoot / drop.ParsedUrl.LocalPath.TrimStart('\\', '/');
-                    if (FileSystem.DirectoryExists(path))
-                    {
-                        foreach (var file in FileSystem.EnumerateFiles(path, EnumerateOptions.Recurse))
-                        {
-                            files.Add((GetRelativePath(file.FullPath, parent: path), file.FullPath));
-                        }
-                    }
-                    else
-                    {
-                        Contract.Assert(FileSystem.FileExists(path));
-                        files.Add((new RelativePath(path.FileName), path));
-                    }
-                }
-                else
-                {
-                    string relativeRoot = "";
-                    if (!string.IsNullOrEmpty(drop.ParsedUrl.Query))
-                    {
-                        var query = HttpUtility.ParseQueryString(drop.ParsedUrl.Query);
-                        relativeRoot = query.Get("root") ?? "";
-                    }
+                var handler = url.Handler;
 
-                    var tempDirectory = FileSystem.GetTempPath() / Path.GetRandomFileName();
-                    var args = $@"get -u {drop.Url} -d ""{tempDirectory}"" --patAuth {DropToken}";
+                var tempDirectory = FileSystem.GetTempPath() / Path.GetRandomFileName();
+                FileSystem.CreateDirectory(tempDirectory);
+                await handler.GetFilesAsync(context, url, tempDirectory, files).ThrowIfFailureAsync();
 
-                    context.PerformOperation(Tracer, () =>
-                    {
-                        FileSystem.CreateDirectory(tempDirectory);
-
-                        if (OverrideLaunchDropProcess != null)
-                        {
-                            OverrideLaunchDropProcess((
-                                exePath: DropExeFilePath.Path,
-                                args: args,
-                                dropUrl: drop.Url,
-                                targetDirectory: tempDirectory.Path,
-                                relativeRoot: relativeRoot)).ThrowIfFailure();
-                        }
-                        else
-                        {
-                            var process = new Process()
-                            {
-                                StartInfo = new ProcessStartInfo(DropExeFilePath.Path, args)
-                                {
-                                    UseShellExecute = false,
-                                    RedirectStandardOutput = true,
-                                    RedirectStandardError = true,
-                                },
-                            };
-
-                            process.OutputDataReceived += (s, e) =>
-                            {
-                                Tracer.Debug(context, "Drop Output: " + e.Data);
-                            };
-
-                            process.ErrorDataReceived += (s, e) =>
-                            {
-                                Tracer.Error(context, "Drop Error: " + e.Data);
-                            };
-
-                            process.Start();
-                            process.BeginOutputReadLine();
-                            process.BeginErrorReadLine();
-
-                            process.WaitForExit();
-
-                            if (process.ExitCode != 0)
-                            {
-                                return new BoolResult($"Process exited with code: {process.ExitCode}");
-                            }
-                        }
-
-                        var filesRoot = tempDirectory / relativeRoot;
-
-                        foreach (var file in FileSystem.EnumerateFiles(filesRoot, EnumerateOptions.Recurse))
-                        {
-                            files.Add((GetRelativePath(file.FullPath, parent: filesRoot), file.FullPath));
-                        }
-
-                        return BoolResult.Success;
-                    },
-                    extraStartMessage: $"Url='{drop.Url}' Exe='{DropExeFilePath}' Args='{args.Replace(DropToken, "***")}' Root='{relativeRoot}'"
-                    ).ThrowIfFailure();
-                }
-
-                return Result.Success<IReadOnlyList<(RelativePath path, AbsolutePath fullPath)>>(files);
+                return Result.Success<IReadOnlyList<DeploymentFile>>(files);
             },
-            extraStartMessage: drop.Url,
-            messageFactory: r => r.Succeeded ? $"{drop.Url} FileCount={r.Value.Count}" : drop.Url).ThrowIfFailure();
+            extraStartMessage: drop.ToHeaderString(),
+            extraEndMessage: r => r.Succeeded ? $"{drop.ToHeaderString()} FileCount={r.Value.Count}" : drop.Url).ThrowIfFailureAsync();
         }
     }
 }

@@ -287,7 +287,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
 
             // Incomplete manifest does not launch process, but should download all available content
             launcher.CurrentRun.Should().BeNull();
-            manifest.Deployment.All(e => e.Value.DownloadUrl == null || launcher.Store.Contains(new ContentHash(e.Value.Hash)));
+            manifest.Deployment.All(e => e.Value.DownloadUrl == null || launcher.Store.Contains(e.Value.Hash));
 
             manifest.IsComplete = true;
             pendingFileSpec.Finish();
@@ -477,7 +477,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             {
                 var bytes = Encoding.UTF8.GetBytes(content);
 
-                var hash = HashInfoLookup.GetContentHasher(HashType.MD5).GetContentHash(bytes).ToString();
+                var hash = HashInfoLookup.GetContentHasher(HashType.MD5).GetContentHash(bytes);
                 var downloadUrl = $"casaas://files?hash={hash}";
                 Content[downloadUrl] = bytes;
                 var result = new TestFileSpec()

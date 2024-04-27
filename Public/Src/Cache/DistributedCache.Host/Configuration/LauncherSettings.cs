@@ -13,7 +13,7 @@ namespace BuildXL.Cache.Host.Configuration
     /// <summary>
     /// Describes settings used by launcher when downloading deployments
     /// </summary>
-    public class LauncherSettings
+    public record LauncherSettings
     {
         /// <summary>
         /// Configuration specifying the tool to launch
