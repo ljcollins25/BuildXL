@@ -28,7 +28,6 @@ namespace BuildXL.Cache.Host.Service
 
         private readonly Uri _sasUri;
         private readonly Uri _manifestUri;
-        private readonly Uri _configurationUri;
 
         private readonly HttpClient _client = new();
 
@@ -37,7 +36,6 @@ namespace BuildXL.Cache.Host.Service
             _processor = new(this);
             _sasUri = sasUri;
 
-            _configurationUri = GetUri(DeploymentUtilities.DeploymentConfigurationFileName);
             _manifestUri = GetUri(DeploymentUtilities.DeploymentManifestRelativePath.Path);
         }
 
@@ -70,8 +68,16 @@ namespace BuildXL.Cache.Host.Service
             DeploymentConfiguration configuration,
             Unit storage)
         {
-            var relativePath = DeploymentUtilities.GetContentRelativePath(value.Hash);
-            return Task.FromResult(new DownloadInfo(GetUri(relativePath.Path).ToString()));
+            var hash = value.Hash;
+            Uri downloadUri = GetDownloadUri(hash);
+            return Task.FromResult(new DownloadInfo(downloadUri.ToString()));
+        }
+
+        private Uri GetDownloadUri(ContentHash hash)
+        {
+            var relativePath = DeploymentUtilities.GetContentRelativePath(hash);
+            var downloadUri = GetUri(relativePath.Path);
+            return downloadUri;
         }
 
         public async Task<string> GetChangeIdAsync(OperationContext context, LauncherSettings settings)
@@ -86,9 +92,10 @@ namespace BuildXL.Cache.Host.Service
             return response.Headers.ETag.Tag;
         }
 
-        public Task<LauncherManifest> GetLaunchManifestAsync(OperationContext context, LauncherSettings settings)
+        public async Task<LauncherManifest> GetLaunchManifestAsync(OperationContext context, LauncherSettings settings)
         {
-            return _processor.UploadFilesAndGetManifestAsync(context, settings.DeploymentParameters, waitForCompletion: true);
+            var manifest = await _processor.UploadFilesAndGetManifestAsync(context, settings.DeploymentParameters, waitForCompletion: true);
+            return manifest;
         }
 
         public async Task<DeploymentManifestResult> GetManifestAsync()
@@ -98,7 +105,10 @@ namespace BuildXL.Cache.Host.Service
                 manifest.ChangeId = GetChangeId(response);
             });
 
-            var configurationJson = await ReadJsonAsync<string>(_configurationUri);
+            var configurationHash = manifest.GetDeploymentConfigurationSpec().Hash;
+
+            var configurationUri = GetDownloadUri(configurationHash);
+            var configurationJson = await ReadJsonAsync<string>(configurationUri);
 
             return new DeploymentManifestResult(manifest, configurationJson);
         }

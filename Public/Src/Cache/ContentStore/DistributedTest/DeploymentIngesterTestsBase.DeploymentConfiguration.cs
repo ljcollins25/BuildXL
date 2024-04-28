@@ -40,6 +40,7 @@ public partial class DeploymentIngesterTestsBase
         'SasUrlTimeToLive': '3m',
         'Tool [Environment:MyEnvRunningOnWindows]': {
             'Executable': 'bin/service.exe',
+            'ServiceId': 'testservice',
             'Arguments': [ 'myargs' ],
             'EnvironmentVariables': {
                 'ConfigPath': '../Foo.txt'

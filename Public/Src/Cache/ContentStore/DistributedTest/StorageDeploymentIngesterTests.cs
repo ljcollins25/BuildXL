@@ -46,8 +46,10 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
     [Collection("Redis-based tests")]
     public class StorageDeploymentIngesterTests : DeploymentIngesterTestsBase
     {
-        private readonly LocalRedisFixture _fixture;
-        private Dictionary<string, StorageAccountInfo> storageByAccountName;
+        protected readonly LocalRedisFixture _fixture;
+        protected Dictionary<string, StorageAccountInfo> storageByAccountName;
+
+        private readonly List<AzuriteStorageProcess> _storageProcesses = new List<AzuriteStorageProcess>();
 
         public StorageDeploymentIngesterTests(LocalRedisFixture fixture, ITestOutputHelper output)
             : base(output)
@@ -55,20 +57,20 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             _fixture = fixture;
         }
 
-        public override async Task TestFullDeployment()
+        protected virtual Dictionary<string, StorageAccountInfo[]> CreateStorageMap()
         {
-            using var s1 = AzuriteStorageProcess.CreateAndStartEmpty(_fixture, TestGlobal.Logger);
-            using var s2 = AzuriteStorageProcess.CreateAndStartEmpty(_fixture, TestGlobal.Logger);
-            using var s3 = AzuriteStorageProcess.CreateAndStartEmpty(_fixture, TestGlobal.Logger);
+            var s1 = CreateStorageProcess();
+            var s2 = CreateStorageProcess();
+            var s3 = CreateStorageProcess();
 
-            var storageMap = new Dictionary<string, StorageAccountInfo[]>()
+            return new Dictionary<string, StorageAccountInfo[]>()
             {
                 {
                     "westus2",
                     new StorageAccountInfo[]
                     {
                         new(s1.ConnectionString, "container1"),
-                        new(s1.ConnectionString, "container2"),
+                        new(s1.ConnectionString, "container2") { UseSas = false },
                         new(s1.ConnectionString, "container3"),
                     }
                 },
@@ -77,7 +79,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                     new StorageAccountInfo[]
                     {
                         new(s2.ConnectionString, "container4"),
-                        new(s2.ConnectionString, "container5"),
+                        new(s2.ConnectionString, "container5") { UseSas = false },
                     }
                 },
                 {
@@ -89,13 +91,37 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                     }
                 }
             };
-
-            storageByAccountName = storageMap
-                .SelectMany(kvp => kvp.Value.Select((account, index) => account with { VirtualAccountName = $"{kvp.Key}_{account.ContainerName}", Region = kvp.Key }))
-                .ToDictionary(a => a.VirtualAccountName);
-
-            await base.TestFullDeployment();
         }
+
+        protected AzuriteStorageProcess CreateStorageProcess()
+        {
+            var process = AzuriteStorageProcess.CreateAndStartEmpty(_fixture, TestGlobal.Logger);
+            _storageProcesses.Add(process);
+            return process;
+        }
+
+        public override async Task TestFullDeployment()
+        {
+            try
+            {
+                storageByAccountName ??= CreateStorageMap()
+                    .SelectMany(kvp => kvp.Value.Select((account, index) => account with { VirtualAccountName = $"{kvp.Key}_{account.ContainerName}", Region = kvp.Key }))
+                    .ToDictionary(a => a.VirtualAccountName);
+
+                await base.TestFullDeployment();
+
+                await PostDeploymentVerifyAsync();
+            }
+            finally
+            {
+                foreach (var process in _storageProcesses)
+                {
+                    process.Dispose();
+                }
+            }
+        }
+
+        protected virtual Task PostDeploymentVerifyAsync() => Task.CompletedTask;
 
         protected override DeploymentIngesterConfiguration ConfigureIngester()
         {
@@ -132,13 +158,15 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             }
         }
 
-        private record StorageAccountInfo(string ConnectionString, string ContainerName)
+        protected record StorageAccountInfo(string ConnectionString, string ContainerName)
         {
             public string Region { get; set; }
             public string VirtualAccountName { get; set; }
 
             // Set this to try against real storage.
             public static string OverrideConnectionString { get; } = null;
+
+            public bool UseSas { get; set; } = true;
 
             public string ConnectionString { get; } = OverrideConnectionString ?? ConnectionString;
 
@@ -149,7 +177,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             {
                 await Container.CreateIfNotExistsAsync();
 
-                if (OverrideConnectionString == null)
+                if (!UseSas)
                 {
                     return Container;
                 }

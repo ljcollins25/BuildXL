@@ -24,7 +24,7 @@ namespace BuildXL.Cache.Host.Service
         private readonly IDeploymentServiceClient _client = new DeploymentServiceClient(innerClient ?? new DeploymentServiceInnerClient());
 
         /// <inheritdoc />
-        public ILauncherProcess CreateProcess(ProcessStartInfo info)
+        public virtual ILauncherProcess CreateProcess(ProcessStartInfo info)
         {
             return new LauncherProcess(info);
         }

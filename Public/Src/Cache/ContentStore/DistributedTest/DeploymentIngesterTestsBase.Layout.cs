@@ -46,6 +46,7 @@ public partial class DeploymentIngesterTestsBase
                 { @"app\appb\Hello.txt", "Hello world" },
                 { @"c\Foo.txt", "Baz" },
                 { @"c\Bar.txt", "Bar" },
+                { @"c\service.exe", "This is service executable" },
             }
         },
     };
