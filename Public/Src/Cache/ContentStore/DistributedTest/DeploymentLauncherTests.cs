@@ -39,49 +39,6 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
     {
         public const string ConfigurationPathEnvironmentVariableName = "ConfigurationPath";
 
-        private static readonly string ConfigString = @"
-{
-    'Drops': [
-        {
-            'Url [Ring:Ring_0]': 'https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop1?root=release/win-x64',
-            'Url [Ring:Ring_1]': 'https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop2?root=debug',
-            'Url [Ring:Ring_2]': 'https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop1?root=release/win-x64',
-            'TargetRelativePath': 'bin'
-        },
-        {
-            'Url': 'file://Env',
-        },
-        {
-            'TargetRelativePath': 'info',
-            'Url [Stamp:ST_S1]': 'file://Files/Foo.txt',
-            'Url [Stamp:ST_S2]': 'file://Env/Foo.txt',
-            'Url [Stamp:ST_S3]': 'file://Stamp3',
-        }
-    ],
-    'Proxy': {
-        'Seeds': 3,
-        'ServiceConfiguration': {
-            // NOTE: This should match the port used for grpc as asp.net server routes requests to grpc
-            'Port': 8105,
-            'RootPath': 'D:/cachedir/proxy',
-            'ProxyAddressTimeToLive': '5m',
-            'RetentionSizeGb': 5,
-            'DeploymentServiceUrl': 'https://buildxlcachetestdep.azurewebsites.net'
-        },
-        'TargetRelativePath': 'config/ProxyConfiguration.json'
-    },
-    'AzureStorageSecretInfo': { 'Name': 'myregionalStorage{Region:LA}', 'TimeToLive':'60m' },
-    'SasUrlTimeToLive': '3m',
-    'Tool [Environment:MyEnvRunningOnWindows]': {
-        'Executable': 'bin/service.exe',
-        'Arguments': 'myargs',
-        'EnvironmentVariables': {
-            'ConfigPath': '../Foo.txt'
-        }
-    }
-}
-".Replace("'", "\"");
-
         public DeploymentLauncherTests(ITestOutputHelper output = null)
             : base(TestGlobal.Logger, output)
         {

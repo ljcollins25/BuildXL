@@ -40,225 +40,16 @@ using BuildXL.Cache.ContentStore.Distributed.Utilities;
 
 namespace BuildXL.Cache.ContentStore.Distributed.Test
 {
-    public class DeploymentIngesterTests : TestBase
+    public class DeploymentIngesterTests : DeploymentIngesterTestsBase
     {
-        public OperationContext Context;
-
-        public const string DropToken = "FAKE_DROP_TOKEN";
         public DeploymentIngesterTests(ITestOutputHelper output)
-            : base(TestGlobal.Logger, output)
+            : base(output)
         {
-            Context = new OperationContext(new Interfaces.Tracing.Context(Logger));
         }
 
-        private class TestDeploymentConfig
+        public override async Task TestFullDeployment()
         {
-            public List<DropDeploymentConfiguration> Drops { get; } = new List<DropDeploymentConfiguration>();
-
-            public class DropDeploymentConfiguration : Dictionary<string, string>
-            {
-            }
-        }
-
-        private static readonly string ConfigString = @"
-{
-    'Drops': [
-        {
-            'BaseUrl[Stage:1]': 'https://dev.azure.com/buildxlcachetest/drop/drops/deployment/stage1',
-            'BaseUrl[Stage:2]': 'https://dev.azure.com/buildxlcachetest/drop/drops/deployment/stage2',
-
-            'RelativeRoot[Tool:A]' : 'tools/toola',
-            'RelativeRoot[Tool:B]' : 'app/appb',
-            'RelativeRoot[Tool:C]' : 'c',
-
-
-            'Url [Ring:Ring_0]': 'https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop1?root=release/win-x64',
-            'Url [Ring:Ring_1]': 'https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop2?root=debug',
-            'Url [Ring:Ring_2]': 'https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop1?root=release/win-x64',
-            'TargetRelativePath': 'bin'
-        },
-        {
-            'Url': 'file://Env',
-        },
-        {
-            'TargetRelativePath': 'info',
-            'Url [Stamp:ST_S1]': 'file://Files/Foo.txt',
-            'Url [Stamp:ST_S2]': 'file://Env/Foo.txt',
-            'Url [Stamp:ST_S3]': 'file://Stamp3',
-        }
-    ],
-    'AzureStorageSecretInfo': { 'Name': 'myregionalStorage{Region:LA}', 'TimeToLive':'60m' },
-    'SasUrlTimeToLive': '3m',
-    'Tool [Environment:MyEnvRunningOnWindows]': {
-        'Executable': 'bin/service.exe',
-        'Arguments': [ 'myargs' ],
-        'EnvironmentVariables': {
-            'ConfigPath': '../Foo.txt'
-        }
-    }
-}
-".Replace("'", "\"");
-
-        [Fact]
-        [Trait("Category", "WindowsOSOnly")] // TODO: investigate why
-        public async Task TestFullDeployment()
-        {
-            var sources = new Dictionary<string, string>()
-            {
-                { @"Stamp3\info.txt", "" },
-
-                { @"Env\RootFile.json", "{ 'key1': 1, 'key2': 2 }" },
-                { @"Env\Subfolder\Hello.txt", "Hello world" },
-                { @"Env\Foo.txt", "Baz" },
-
-                { @"Files\Foo.txt", "Bar" },
-            };
-
-            Dictionary<string, string> getSubDrop(Dictionary<string, string> dropContents, string root, string prefix)
-            {
-                return dropContents.Where(e => e.Key.StartsWith(root.Replace("/", "\\")))
-                    .ToDictionary(e => e.Key.Substring((prefix ?? root).Length), e => e.Value);
-            }
-
-            Dictionary<string, string> getSourceDrop(string root, string prefix)
-            {
-                return getSubDrop(sources, root, prefix);
-            }
-
-            var baseUrlDrops = new Dictionary<string, Dictionary<string, string>>()
-            {
-                {
-                    "https://dev.azure.com/buildxlcachetest/drop/drops/deployment/stage1",
-                    new Dictionary<string, string>
-                    {
-                        { @"tools\toola\info.txt", "" },
-                        { @"app\appb\subfolder\file.json", "{ 'key1': 1, 'key2': 2 }" },
-                        { @"app\appb\Hello.txt", "Hello world" },
-                        { @"c\Foo.txt", "Baz" },
-                        { @"c\Bar.txt", "Bar" },
-                    }
-                },
-                {
-                    "https://dev.azure.com/buildxlcachetest/drop/drops/deployment/stage2",
-                    new Dictionary<string, string>
-                    {
-                        { @"tools\toola\info.txt", "Information appears hear now" },
-                        { @"app\appb\subfolder\file.json", "{ 'key1': 3, 'key2': 4 }" },
-                        { @"app\appb\subfolder\newfile.json", "{ 'prop': 'this is a new file', 'key2': 4 }" },
-                        { @"app\appb\Hello.txt", "Hello world" },
-                        { @"c\Foo.txt", "Baz" },
-                        { @"c\Bar.txt", "Bar" },
-                    }
-                },
-            };
-
-            var drops = new Dictionary<string, Dictionary<string, string>>()
-            {
-                {
-                    "https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop1?root=release/win-x64",
-                    new Dictionary<string, string>
-                    {
-                        { @"file1.bin", "File content 1" },
-                        { @"file2.txt", "File content 2" },
-                        { @"sub\file3.dll", "File content 3" }
-                    }
-                },
-                {
-                    "https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop2?root=debug",
-                    new Dictionary<string, string>
-                    {
-                        { @"file1.bin", "File content 1" },
-                        { @"file2.txt", "File content 2 changed" },
-                        { @"sub\file5.dll", "File content 5" }
-                    }
-                },
-                {
-                    DeploymentUtilities.ConfigDropUri.OriginalString,
-                    new Dictionary<string, string>()
-                    {
-                        { DeploymentUtilities.DeploymentConfigurationFileName, ConfigString }
-                    }
-                },
-                {
-                    "file://Env", getSourceDrop(@"Env\", @"Env\")
-                },
-                {
-                    "file://Files/Foo.txt", getSourceDrop(@"Files\Foo.txt", @"Files\")
-                },
-                {
-                    "file://Env/Foo.txt", getSourceDrop(@"Env\Foo.txt", @"Env\")
-                },
-                {
-                    "file://Stamp3", getSourceDrop(@"Stamp3\", @"Stamp3\")
-                }
-            };
-
-            var deploymentRoot = TestRootDirectoryPath / "deploy";
-            var baseConfig = new DeploymentIngesterBaseConfiguration(
-                SourceRoot: base.TestRootDirectoryPath / "src",
-                DeploymentRoot: deploymentRoot,
-                DeploymentConfigurationPath: base.TestRootDirectoryPath / "DeploymentConfiguration.json",
-                FileSystem);
-
-            var configuration = new DeploymentIngesterConfiguration(
-                baseConfig,
-                new FileSystemDeploymentContentStore(baseConfig, retentionSizeGb: 1));
-
-            var ingester = new DeploymentIngester(
-                Context,
-                configuration);
-
-            // Write source files
-            WriteFiles(ingester.SourceRoot, sources);
-
-            FileSystem.WriteAllText(ingester.DeploymentConfigurationPath, ConfigString);
-
-            Dictionary<string, string> getDropContents(string dropUrl, string relativeRoot = null)
-            {
-                var uri = new UriBuilder(dropUrl);
-                var query = uri.Query;
-                uri.Query = null;
-
-                if (relativeRoot == null && query != null)
-                {
-                    relativeRoot = HttpUtility.ParseQueryString(query)["root"];
-                }
-
-                return baseUrlDrops.TryGetValue(uri.Uri.ToString(), out var contents)
-                    ? getSubDrop(contents, relativeRoot, prefix: "")
-                    : drops[dropUrl];
-            }
-
-            var dropHandler = new FuncDeploymentIngesterUrlHander(configuration, "TestDropHandler", t =>
-            {
-                var dropContents = getDropContents(t.url.EffectiveUrl.ToString(), t.url.RelativeRoot);
-                AbsolutePath root = t.tempDirectory / (t.url.RelativeRoot ?? "");
-                WriteFiles(root, dropContents);
-                return Result.SuccessTask(root);
-            });
-
-            configuration.HandlerByScheme["https"] = dropHandler;
-
-            await ingester.RunAsync().ShouldBeSuccess();
-
-            var manifestText = FileSystem.ReadAllText(ingester.DeploymentManifestPath);
-            var deploymentManifest = JsonUtilities.JsonDeserialize<DeploymentManifest>(manifestText);
-
-            foreach (var drop in drops)
-            {
-                var uri = new Uri(drop.Key);
-                var expectedDropContents = drops[drop.Key];
-                var layoutSpec = deploymentManifest.Drops[drop.Key];
-                layoutSpec.Count.Should().Be(expectedDropContents.Count);
-                foreach (var fileAndContent in expectedDropContents)
-                {
-                    var hash = layoutSpec[fileAndContent.Key].Hash;
-                    var expectedPath = ingester.DeploymentRoot / DeploymentUtilities.GetContentRelativePath(hash);
-
-                    var text = FileSystem.ReadAllText(expectedPath);
-                    text.Should().Be(fileAndContent.Value);
-                }
-            }
+            await base.TestFullDeployment();
 
             var clock = new MemoryClock();
             var deploymentService = new DeploymentService(new DeploymentServiceConfiguration(), deploymentRoot, _ => new TestSecretsProvider(), clock);
@@ -271,14 +62,14 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             };
 
             await verifyLaunchManifestAsync(new DeploymentParameters()
-                {
-                    Stamp = "ST_S3",
-                    Ring = "Ring_1",
-                    Properties =
+            {
+                Stamp = "ST_S3",
+                Ring = "Ring_1",
+                Properties =
                     {
                         { "Stage", "1" }
                     }
-                },
+            },
                 new HashSet<(string targetPath, string drop)>()
                 {
                     ("bin", "https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop2?root=debug"),
@@ -287,14 +78,14 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                 });
 
             await verifyLaunchManifestAsync(new DeploymentParameters()
-                {
-                    Environment = "MyEnvRunningOnWindows",
-                    Properties =
+            {
+                Environment = "MyEnvRunningOnWindows",
+                Properties =
                     {
                         { "Stage", "2" },
                         { "Tool", "A" }
                     }
-                },
+            },
                 new HashSet<(string targetPath, string drop)>()
                 {
                     ("bin", "https://dev.azure.com/buildxlcachetest/drop/drops/deployment/stage2?root=tools/toola"),
@@ -329,16 +120,6 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                 }
 
                 return launchManifest;
-            }
-        }
-
-        private void WriteFiles(AbsolutePath root, Dictionary<string, string> files)
-        {
-            foreach (var file in files)
-            {
-                var path = root / file.Key;
-                FileSystem.CreateDirectory(path.Parent);
-                FileSystem.WriteAllText(path, file.Value);
             }
         }
 

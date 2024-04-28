@@ -32,7 +32,7 @@ namespace BuildXL.Cache.Host.Service
     public interface IDeploymentServiceInnerClient : IDeploymentServiceClient
     {
         /// <summary>
-        /// Quickly query the change id which indicates if the result of <see cref="GetLaunchManifestAsync"/>
+        /// Quickly query the change id which indicates if the result of <see cref="IDeploymentServiceClient.GetLaunchManifestAsync"/>
         /// may have changed
         /// </summary>
         /// <param name="settings"></param>
