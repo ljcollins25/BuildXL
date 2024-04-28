@@ -50,7 +50,7 @@ namespace BuildXL.Cache.Host.Service
 
     public record DeploymentManifestResult(DeploymentManifest Manifest, string ConfigurationJson);
 
-    public record struct DeploymentConfigurationResult(DeploymentConfiguration Configuration, DeploymentManifest Manifest, string ContentId);
+    public record struct DeploymentConfigurationResult(DeploymentConfiguration Configuration, DeploymentManifest Manifest, string ContentId, HostParameters AugmentedParameters);
 
     public class DownloadInfo
     {

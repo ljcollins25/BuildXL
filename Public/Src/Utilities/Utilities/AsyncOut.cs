@@ -1,6 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
+using System.Runtime.InteropServices;
+
 namespace BuildXL.Utilities
 {
     /// <summary>
@@ -17,6 +20,27 @@ namespace BuildXL.Utilities
         public static implicit operator T(AsyncOut<T> value)
         {
             return value.Value;
+        }
+
+        /// <nodoc />
+        public AsyncOut()
+        {
+        }
+
+        /// <summary>
+        /// Convenience constructor to all using with target typed new.
+        /// </summary>
+        public AsyncOut(out AsyncOut<T> @this)
+        {
+            @this = this;
+        }
+
+        /// <summary>
+        /// Sets the value
+        /// </summary>
+        public void Set(T value)
+        {
+            Value = value;
         }
     }
 

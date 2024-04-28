@@ -14,7 +14,7 @@ namespace BuildXL.Cache.Host.Configuration
     /// <summary>
     /// Describes drops/files which should be deployed
     /// </summary>
-    public class DeploymentConfiguration
+    public class DeploymentConfiguration : ConfigurationParameters
     {
         /// <summary>
         /// List of drops/files with target paths. Drops overlay with each other and later declarations can overwrite files from

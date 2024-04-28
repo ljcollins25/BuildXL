@@ -4,13 +4,21 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.ContractsLight;
+using System.Runtime.CompilerServices;
 using BuildXL.Cache.ContentStore.Interfaces.Logging;
+using BuildXL.Cache.ContentStore.UtilitiesCore.Internal;
 
 #nullable disable
 
 namespace BuildXL.Cache.Host.Configuration
 {
-    public class HostParameters
+    public record PreprocessorParameters
+    {
+        public Dictionary<string, string> Properties { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, string[]> Flags { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public record HostParameters : PreprocessorParameters
     {
         private const string HostPrefix = "BuildXL.Cache.Host.";
 
@@ -25,14 +33,29 @@ namespace BuildXL.Cache.Host.Configuration
         public string ConfigurationId { get; set; }
         public DateTime UtcNow { get; set; } = DateTime.UtcNow;
 
-        public Dictionary<string, string> Properties { get; set; } = new();
-        public Dictionary<string, string[]> Flags { get; set; } = new();
+        public HostParameters Copy(PreprocessorParameters overrides = null)
+        {
+            var result = this with
+            {
+                Properties = new(Properties, StringComparer.OrdinalIgnoreCase),
+                Flags = new(Flags, StringComparer.OrdinalIgnoreCase)
+            };
 
+            if (overrides != null)
+            {
+                result.Properties.Add(overrides.Properties.ToAddOrSetEntries());
+                result.Flags.Add(overrides.Flags.ToAddOrSetEntries());
+            }
+
+            return result;
+        }
 
         /// <summary>
-        /// Creates and instance of <see cref="HostParameters"/> from the environment variables (unless <paramref name="testEnvironment"/> is not null, then this dictionary is used as a storage of environment variables).
+        /// Creates and instance of <see cref="HostParameters"/> from the environment variables (unless <paramref name="customEnvironment"/> is not null, then this dictionary is used as a source of environment variables).
         /// </summary>
-        public static HostParameters FromEnvironment(IDictionary<string, string> testEnvironment = null)
+        public static HostParameters FromEnvironment(
+            IDictionary<string, string> customEnvironment = null,
+            string prefix = HostPrefix)
         {
             var result = new HostParameters()
             {
@@ -60,13 +83,13 @@ namespace BuildXL.Cache.Host.Configuration
             string getValue(string name)
             {
                 string value;
-                if (testEnvironment is not null)
+                if (customEnvironment is not null)
                 {
-                    testEnvironment.TryGetValue(HostPrefix + name, out value);
+                    customEnvironment.TryGetValue(prefix + name, out value);
                 }
                 else
                 {
-                    value = System.Environment.GetEnvironmentVariable(HostPrefix + name);
+                    value = System.Environment.GetEnvironmentVariable(prefix + name);
                 }
 
                 return string.IsNullOrEmpty(value) ? null : value;
@@ -85,20 +108,20 @@ namespace BuildXL.Cache.Host.Configuration
             var env = new Dictionary<string, string>();
             if (saveConfigurationId)
             {
-                setValue(nameof(ConfigurationId), ConfigurationId);
+                setValue(ConfigurationId);
             }
 
-            setValue(nameof(ServiceVersion), ServiceVersion);
-            setValue(nameof(MachineFunction), MachineFunction);
-            setValue(nameof(Environment), Environment);
-            setValue(nameof(Stamp), Stamp);
-            setValue(nameof(Ring), Ring);
-            setValue(nameof(Machine), Machine);
-            setValue(nameof(Region), Region);
-            setValue(nameof(MachineFunction), MachineFunction);
-            setValue(nameof(ServiceDir), ServiceDir);
+            setValue(ServiceVersion);
+            setValue(MachineFunction);
+            setValue(Environment);
+            setValue(Stamp);
+            setValue(Ring);
+            setValue(Machine);
+            setValue(Region);
+            setValue(MachineFunction);
+            setValue(ServiceDir);
 
-            void setValue(string name, string value)
+            void setValue(string value, [CallerArgumentExpression(nameof(value))]string name = null)
             {
                 if (!string.IsNullOrEmpty(value))
                 {
@@ -141,7 +164,7 @@ namespace BuildXL.Cache.Host.Configuration
         }
     }
 
-    public class DeploymentParameters : HostParameters
+    public record DeploymentParameters : HostParameters
     {
         public string ContextId { get; set; } = Guid.NewGuid().ToString();
         public string AuthorizationSecretName { get; set; }

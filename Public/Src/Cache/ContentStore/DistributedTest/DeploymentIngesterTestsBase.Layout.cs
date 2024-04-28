@@ -7,6 +7,7 @@ using System.Linq;
 using System.Web;
 using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 using BuildXL.Cache.Host.Service;
+using FluentAssertions;
 
 namespace BuildXL.Cache.ContentStore.Distributed.Test;
 
@@ -99,8 +100,9 @@ public partial class DeploymentIngesterTestsBase
 
     protected static Dictionary<string, string> getSubDrop(Dictionary<string, string> dropContents, string root, string prefix)
     {
+        root.Should().NotBeNullOrEmpty();
         return dropContents.Where(e => e.Key.StartsWith(root.Replace("/", "\\")))
-            .ToDictionary(e => e.Key.Substring((prefix ?? root).Length), e => e.Value);
+            .ToDictionary(e => e.Key.Substring((prefix ?? root).Length).TrimStart('\\'), e => e.Value);
     }
 
     protected Dictionary<string, string> getSourceDrop(string root, string prefix)
@@ -120,7 +122,7 @@ public partial class DeploymentIngesterTestsBase
         }
 
         return baseUrlDrops.TryGetValue(uri.Uri.ToString(), out var contents)
-            ? getSubDrop(contents, relativeRoot, prefix: "")
+            ? getSubDrop(contents, relativeRoot, prefix: relativeRoot)
             : drops[dropUrl];
     }
 }

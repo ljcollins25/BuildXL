@@ -11,12 +11,9 @@ namespace BuildXL.Utilities.Collections
     public static class DictionaryExtensions
     {
         /// <summary>
-        /// Adds a range of values into the dictionary.
+        /// Sets a range of values into the dictionary.
         /// </summary>
-        /// <remarks>
-        /// Unlike <see cref="IDictionary{TKey,TValue}.Add(TKey,TValue)"/> method, this one does not throw if a value is already presented in the dictionary.
-        /// </remarks>
-        public static IDictionary<TKey, TValue> AddRange<TKey, TValue>(this IDictionary<TKey, TValue> @this, IEnumerable<KeyValuePair<TKey, TValue>> other) where TKey : notnull
+        public static IDictionary<TKey, TValue> SetRange<TKey, TValue>(this IDictionary<TKey, TValue> @this, IEnumerable<KeyValuePair<TKey, TValue>> other) where TKey : notnull
         {
             foreach (var kvp in other)
             {
@@ -24,6 +21,19 @@ namespace BuildXL.Utilities.Collections
             }
 
             return @this;
+        }
+
+        /// <summary>
+        /// Adds a range of values into the dictionary.
+        /// </summary>
+        /// <remarks>
+        /// Unlike <see cref="IDictionary{TKey,TValue}.Add(TKey,TValue)"/> method, this one does not throw if a value is already presented in the dictionary.
+        /// </remarks>
+        public static IDictionary<TKey, TValue> AddRange<TKey, TValue>(this IDictionary<TKey, TValue> @this, IEnumerable<KeyValuePair<TKey, TValue>> other) where TKey : notnull
+        {
+            // Logic extracted to SetRange which is named better to describe the behavior. This method name is kept
+            // as is for compatibility purposes.
+            return SetRange(@this, other);
         }
 
         /// <summary>

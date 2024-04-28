@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -19,6 +20,7 @@ using BuildXL.Cache.ContentStore.Tracing;
 using BuildXL.Cache.ContentStore.UtilitiesCore;
 using BuildXL.Cache.ContentStore.Utils;
 using BuildXL.Cache.Host.Configuration;
+using BuildXL.Utilities;
 using BuildXL.Utilities.Collections;
 using BuildXL.Utilities.Serialization;
 using static BuildXL.Cache.Host.Configuration.DeploymentManifest;
@@ -74,6 +76,11 @@ namespace BuildXL.Cache.Host.Service
         /// File name of the ingester configuration file
         /// </summary>
         public static string IngesterConfigurationFileName { get; } = "IngesterConfiguration.json";
+
+        /// <summary>
+        /// Name of root json property specifying supplemental preprocessor parameters.
+        /// </summary>
+        public const string PreprocessorParametersJsonPropertyName = "#Parameters";
 
         /// <summary>
         /// Gets the relative from deployment root to the file with given hash in CAS
@@ -209,6 +216,45 @@ namespace BuildXL.Cache.Host.Service
             SpanReader reader = hash.ToFixedBytes().ToByteArray().AsSpan();
             double numerator = reader.Read<uint>();
             return numerator / uint.MaxValue;
+        }
+
+        /// <summary>
+        /// Gets augmenting parameters with inlined values in the form of root '#parameters' property of type <see cref="PreprocessorParameters"/>.
+        /// </summary>
+        public static bool TryGetPreprocessorParameters(this JsonElement element, HostParameters inputParams, out PreprocessorParameters parameters)
+        {
+            parameters = null;
+            if (element.TryGetProperty(PreprocessorParametersJsonPropertyName, out var preprocessorElement))
+            {
+                var preprocessor = GetHostJsonPreprocessor(inputParams);
+                var json = preprocessor.Preprocess(preprocessorElement);
+
+                preprocessorElement = JsonDeserialize<JsonElement>(json);
+                parameters = preprocessorElement.Deserialize<PreprocessorParameters>(JsonUtilities.DefaultSerializationOptions);
+            }
+
+            return parameters != null;
+        }
+
+        /// <summary>
+        /// Preprocesses the given json with specified parameters. Additionally allows augmenting parameters
+        /// with inlined values in the form of root '#parameters' property of type <see cref="PreprocessorParameters"/>.
+        /// </summary>
+        public static string Preprocess(string json, HostParameters parameters, bool useInlinedParameters = false, AsyncOut<HostParameters> outParameters = null)
+        {
+            using var document = JsonDeserialize<JsonDocument>(json);
+            var originalParameters = parameters;
+            if (useInlinedParameters
+                && document.RootElement.TryGetPreprocessorParameters(parameters, out var additionalParameters))
+            {
+                parameters = parameters.Copy(additionalParameters);
+            }
+
+            outParameters?.Set(parameters);
+            var preprocessor = GetHostJsonPreprocessor(parameters);
+            var preprocessedJson = preprocessor.Preprocess(document.RootElement);
+
+            return preprocessedJson;
         }
 
         /// <summary>

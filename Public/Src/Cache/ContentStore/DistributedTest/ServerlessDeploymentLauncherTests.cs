@@ -98,8 +98,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                     ServiceVersion = "10",
                     Properties =
                     {
-                        { "Stage", "2" },
-                        { "Tool", "C" }
+                        { "RunKind", "Stage2C" }
                     }
                 },
                 ServiceLifetimePollingIntervalSeconds = 0.01,
@@ -121,6 +120,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
 
             await launcher.GetDownloadAndRunDeployment(context).ShouldBeSuccess();
 
+            await launcher.ShutdownAsync(context).ThrowIfFailureAsync();
         }
     }
 

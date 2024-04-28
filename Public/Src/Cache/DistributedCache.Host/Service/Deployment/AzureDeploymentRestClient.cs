@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.ContractsLight;
@@ -113,7 +114,7 @@ namespace BuildXL.Cache.Host.Service
             return new DeploymentManifestResult(manifest, configurationJson);
         }
 
-        private async Task<T> ReadJsonAsync<T>(Uri uri, Action<T, HttpResponseMessage> handleResponse = null)
+        private async Task<T> ReadJsonAsync<T>(Uri uri, Action<T, HttpResponseMessage> handleResponse = null, HostParameters preprocessParameters = null)
         {
             var response = await _client.GetAsync(uri);
             response.EnsureSuccessStatusCode();
@@ -137,6 +138,12 @@ namespace BuildXL.Cache.Host.Service
             var secrets = ImmutableDictionary<string, string>.Empty;
             if (!string.IsNullOrEmpty(keyVaultUri))
             {
+                var uri = new Uri(keyVaultUri);
+                if (!uri.IsAbsoluteUri)
+                {
+                    var secretsFileUri = GetUri(keyVaultUri);
+
+                }
                 // TODO: Query blob storage to get key map?
             }
 
@@ -157,6 +164,10 @@ namespace BuildXL.Cache.Host.Service
         {
             // This should not actually be called by the launcher
             throw Contract.AssertFailure("This method should not be called.");
+        }
+
+        private class CaseInsensitiveMap() : Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
         }
     }
 }

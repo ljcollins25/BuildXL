@@ -124,14 +124,14 @@ namespace BuildXL.Cache.Host.Service
                 async () =>
                 {
                     Tracer.Debug(context, "IsAuthorizedAsync: Reading deployment configuration");
-                    var (deployConfig, _, contentId) = await DeploymentProcessor.ReadDeploymentConfigurationAsync(parameters);
+                    var (deployConfig, _, contentId, updatedParameters) = await DeploymentProcessor.ReadDeploymentConfigurationAsync(parameters);
                     if (!deployConfig.AuthorizationSecretNames.Contains(parameters.AuthorizationSecretName))
                     {
                         throw new UnauthorizedAccessException($"Secret names do not match: Expected='{string.Join(", ", deployConfig.AuthorizationSecretNames)}' Actual='{parameters.AuthorizationSecretName}'");
                     }
 
                     Tracer.Debug(context, "IsAuthorizedAsync: Loading secrets provider");
-                    var secretsProvider = await GetSecretsProviderAsync(context, deployConfig.KeyVaultUri);
+                    var secretsProvider = await GetSecretsProviderAsync(context, deployConfig.KeyVaultUri, updatedParameters);
 
                     Tracer.Debug(context, "IsAuthorizedAsync: Getting secret");
                     var secret = await GetSecretAsync(context, secretsProvider, new SecretConfiguration()
@@ -178,7 +178,7 @@ namespace BuildXL.Cache.Host.Service
 
         public Task<string> GetProxyBaseAddressAsync(OperationContext context, DeploymentConfigurationResult configuration, HostParameters parameters)
         {
-            return GetProxyBaseAddress(context, () => Task.FromResult(configuration), parameters);
+            return GetProxyBaseAddress(context, () => Task.FromResult(configuration));
         }
 
         public Task<string> GetProxyBaseAddress(OperationContext context, HostParameters parameters)
@@ -186,18 +186,19 @@ namespace BuildXL.Cache.Host.Service
             return GetProxyBaseAddress(
                 context,
                 () => DeploymentProcessor.ReadDeploymentConfigurationAsync(parameters),
-                parameters,
                 // Return service url to route content requests to this service if this is a seed machine
                 getDefaultBaseAddress: config => config.Proxy.ServiceConfiguration.DeploymentServiceUrl);
         }
 
-        private Task<string> GetProxyBaseAddress(OperationContext context, Func<Task<DeploymentConfigurationResult>> getConfiguration, HostParameters parameters, Func<DeploymentConfiguration, string> getDefaultBaseAddress = null)
+        private Task<string> GetProxyBaseAddress(OperationContext context, Func<Task<DeploymentConfigurationResult>> getConfiguration, Func<DeploymentConfiguration, string> getDefaultBaseAddress = null)
         {
+            HostParameters parametersResult = null;
             return context.PerformOperationAsync(
                 Tracer,
                 async () =>
                 {
-                    var (configuration, manifest, _) = await getConfiguration();
+                    var (configuration, manifest, _, parameters) = await getConfiguration();
+                    parametersResult = parameters;
 
                     // Invalidate proxy on any changes to deployment configuration
                     var contentId = manifest.GetDeploymentConfigurationSpec().Hash;
@@ -214,7 +215,7 @@ namespace BuildXL.Cache.Host.Service
 
                     return new Result<string>(proxyManager.GetBaseAddress(parameters, configuration) ?? getDefaultBaseAddress?.Invoke(configuration), isNullAllowed: true);
                 },
-                extraEndMessage: r => $"{parameters} BaseAddress={r.GetValueOrDefault()}").ThrowIfFailureAsync();
+                extraEndMessage: r => $"{parametersResult} BaseAddress={r.GetValueOrDefault()}").ThrowIfFailureAsync();
         }
 
         public async Task<string> GetSecretAsync(OperationContext context, ISecretsProvider secretsProvider, SecretConfiguration secretInfo)

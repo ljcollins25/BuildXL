@@ -47,20 +47,18 @@ namespace BuildXL.Cache.Host.Service
         {
             var (manifest, configJson) = await Host.GetManifestAsync();
 
-            var preprocessor = DeploymentUtilities.GetHostJsonPreprocessor(parameters);
-
-            var preprocessedConfigJson = preprocessor.Preprocess(configJson);
+            var preprocessedConfigJson = DeploymentUtilities.Preprocess(configJson, parameters, useInlinedParameters: true, outParameters: new(out var updatedParameters));
             var contentId = ComputeShortContentId(preprocessedConfigJson);
 
             var config = JsonUtilities.JsonDeserialize<DeploymentConfiguration>(preprocessedConfigJson);
 
-            return new(config, manifest, contentId);
+            return new(config, manifest, contentId, updatedParameters);
         }
 
         /// <summary>
         /// Uploads the deployment files to the target storage account and returns the launcher manifest for the given deployment parameters
         /// </summary>
-        public Task<LauncherManifest> UploadFilesAndGetManifestAsync(OperationContext context, DeploymentParameters parameters, bool waitForCompletion)
+        public Task<LauncherManifest> UploadFilesAndGetManifestAsync(OperationContext context, DeploymentParameters deploymentParameters, bool waitForCompletion)
         {
             int pendingFiles = 0;
             int totalFiles = 0;
@@ -69,8 +67,8 @@ namespace BuildXL.Cache.Host.Service
                 Tracer,
                 async () =>
                 {
-                    var configResult = await ReadDeploymentConfigurationAsync(parameters);
-                    var (deployConfig, deploymentManifest, contentId) = configResult;
+                    var configResult = await ReadDeploymentConfigurationAsync(deploymentParameters);
+                    var (deployConfig, deploymentManifest, contentId, parameters) = configResult;
                     var resultManifest = new LauncherManifest()
                     {
                         ContentId = contentId,
@@ -138,7 +136,7 @@ namespace BuildXL.Cache.Host.Service
 
                         async Task<(string targetPath, FileSpec entry)> ensureUploadedAndGetEntry()
                         {
-                            var downloadInfo = parameters.GetContentInfoOnly
+                            var downloadInfo = deploymentParameters.GetContentInfoOnly
                                 ? null
                                 : await Host.EnsureUploadedAndGetDownloadUrlAsync(context, fileSpec, deployConfig, storage);
 
@@ -188,8 +186,8 @@ namespace BuildXL.Cache.Host.Service
 
                     return Result.Success(resultManifest);
                 },
-                extraStartMessage: $"Machine={parameters.Machine} Stamp={parameters.Stamp} Wait={waitForCompletion}",
-                extraEndMessage: r => $"Machine={parameters.Machine} Stamp={parameters.Stamp} Id=[{r.GetValueOrDefault()?.ContentId}] Drops={r.GetValueOrDefault()?.Drops.Count ?? 0} Files[Total={totalFiles}, Pending={pendingFiles}, Completed={completedFiles}] Wait={waitForCompletion}"
+                extraStartMessage: $"Machine={deploymentParameters.Machine} Stamp={deploymentParameters.Stamp} Wait={waitForCompletion}",
+                extraEndMessage: r => $"Machine={deploymentParameters.Machine} Stamp={deploymentParameters.Stamp} Id=[{r.GetValueOrDefault()?.ContentId}] Drops={r.GetValueOrDefault()?.Drops.Count ?? 0} Files[Total={totalFiles}, Pending={pendingFiles}, Completed={completedFiles}] Wait={waitForCompletion}"
                 ).ThrowIfFailureAsync();
         }
 

@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using BuildXL.Cache.ContentStore.Distributed.Utilities;
 using BuildXL.Utilities.Collections;
 
 namespace BuildXL.Cache.Host.Service
@@ -77,11 +78,18 @@ namespace BuildXL.Cache.Host.Service
         public string Preprocess(string json)
         {
             using (var document = JsonDocument.Parse(json, DeploymentUtilities.ConfigurationDocumentOptions))
+            {
+                return Preprocess(document.RootElement);
+            }
+        }
+
+        public string Preprocess(JsonElement document)
+        {
             using (var stream = new MemoryStream())
             {
                 using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions() { Indented = true }))
                 {
-                    PreprocessJsonElement(document.RootElement, writer);
+                    PreprocessJsonElement(document, writer);
                 }
 
                 stream.Position = 0;

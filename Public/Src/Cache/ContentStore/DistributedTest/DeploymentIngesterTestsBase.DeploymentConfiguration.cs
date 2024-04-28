@@ -11,6 +11,15 @@ public partial class DeploymentIngesterTestsBase
 {
     private static readonly string ConfigString = @"
     {
+        '#Parameters': {
+            'Flags': {
+
+            },
+            'Properties': {
+                'Stage [RunKind:Stage2C]': '2',
+                'Tool  [RunKind:Stage2C]': 'C'
+            }
+        },
         'Drops': [
             {
                 'BaseUrl[Stage:1]': 'https://dev.azure.com/buildxlcachetest/drop/drops/deployment/stage1',
