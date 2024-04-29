@@ -140,7 +140,7 @@ namespace BuildXL.Cache.Host.Service
             return UploadFileAsync(context, sourcePath);
         }
 
-        private async Task<PutResult> UploadFileAsync(OperationContext context, AbsolutePath sourcePath, string overrideBlobName = null)
+        public async Task<PutResult> UploadFileAsync(OperationContext context, AbsolutePath sourcePath, string overrideBlobName = null)
         {
             ContentHash? hash = overrideBlobName != null ? null : ContentHashingHelper.HashFile(sourcePath.ToString(), HashType.SHA256);
 

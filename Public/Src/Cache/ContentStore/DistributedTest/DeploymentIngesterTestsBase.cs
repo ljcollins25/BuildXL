@@ -134,14 +134,18 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             return Task.CompletedTask;
         }
 
-        private void WriteFiles(AbsolutePath root, Dictionary<string, string> files)
+        protected IReadOnlyList<AbsolutePath> WriteFiles(AbsolutePath root, Dictionary<string, string> files)
         {
+            var paths = new List<AbsolutePath>();
             foreach (var file in files)
             {
                 var path = root / file.Key;
+                paths.Add(path);
                 FileSystem.CreateDirectory(path.Parent);
                 FileSystem.WriteAllText(path, file.Value);
             }
+
+            return paths;
         }
 
         protected class TestSecretsProvider : ISecretsProvider

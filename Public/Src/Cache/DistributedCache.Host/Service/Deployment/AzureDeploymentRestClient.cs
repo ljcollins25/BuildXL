@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Diagnostics.ContractsLight;
 using System.IO;
 using System.Net.Http;
+using System.Reflection.Metadata;
 using System.Text.Json;
 using System.Threading.Tasks;
 using BuildXL.Cache.ContentStore.Hashing;
@@ -120,6 +121,11 @@ namespace BuildXL.Cache.Host.Service
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
+            if (preprocessParameters != null)
+            {
+                json = DeploymentUtilities.Preprocess(json, preprocessParameters);
+            }
+
             var result = typeof(T) == typeof(string)
                 ? (T)(object)json
                 : JsonSerializer.Deserialize<T>(json, DeploymentUtilities.ConfigurationSerializationOptions);
@@ -135,15 +141,16 @@ namespace BuildXL.Cache.Host.Service
 
         public async Task<ISecretsProvider> GetSecretsProviderAsync(OperationContext context, string keyVaultUri, HostParameters parameters)
         {
-            var secrets = ImmutableDictionary<string, string>.Empty;
+            IReadOnlyDictionary<string, string> secrets = ImmutableDictionary<string, string>.Empty;
             if (!string.IsNullOrEmpty(keyVaultUri))
             {
-                var uri = new Uri(keyVaultUri);
-                if (!uri.IsAbsoluteUri)
+                var uri = new Uri(keyVaultUri, UriKind.RelativeOrAbsolute);
+                if (!uri.IsAbsoluteUri || uri.IsFile)
                 {
-                    var secretsFileUri = GetUri(keyVaultUri);
-
+                    var secretsFileUri = GetUri(uri.IsAbsoluteUri ? uri.LocalPath : keyVaultUri);
+                    secrets = await ReadJsonAsync<CaseInsensitiveMap>(secretsFileUri, preprocessParameters: parameters);
                 }
+
                 // TODO: Query blob storage to get key map?
             }
 

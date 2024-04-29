@@ -362,6 +362,11 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
 
             public event Action Exited;
 
+            public void VerifyEnvVar(string name, string value)
+            {
+                StartInfo.Environment.Should().ContainKey(name).WhichValue.Should().Be(value);
+            }
+
             public void Exit(int exitCode)
             {
                 if (!HasExited)

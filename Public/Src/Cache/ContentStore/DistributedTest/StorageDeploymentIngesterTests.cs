@@ -4,42 +4,21 @@
 #if NETCOREAPP
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Threading;
+using System.Text;
 using System.Threading.Tasks;
-using System.Web;
-using BuildXL.Cache.ContentStore.Distributed.NuCache;
+using Azure.Storage.Blobs;
 using BuildXL.Cache.ContentStore.Hashing;
-using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 using BuildXL.Cache.ContentStore.Interfaces.Results;
-using BuildXL.Cache.ContentStore.Interfaces.Auth;
-using BuildXL.Cache.ContentStore.Interfaces.Stores;
-using BuildXL.Cache.ContentStore.Interfaces.Tracing;
-using BuildXL.Cache.ContentStore.InterfacesTest.Results;
-using BuildXL.Cache.ContentStore.InterfacesTest.Time;
-using BuildXL.Cache.ContentStore.Tracing;
-using BuildXL.Cache.ContentStore.Tracing.Internal;
-using BuildXL.Cache.Host.Configuration;
 using BuildXL.Cache.Host.Service;
-using BuildXL.Launcher.Server;
-using BuildXL.Utilities;
-using BuildXL.Utilities.Core;
+using BuildXL.Cache.Host.Service.Deployment;
 using BuildXL.Utilities.Collections;
+using ContentStoreTest.Distributed.Redis;
 using ContentStoreTest.Test;
 using FluentAssertions;
 using Xunit;
 using Xunit.Abstractions;
-using AbsolutePath = BuildXL.Cache.ContentStore.Interfaces.FileSystem.AbsolutePath;
-using RelativePath = BuildXL.Cache.ContentStore.Interfaces.FileSystem.RelativePath;
-using BuildXL.Cache.Host.Service.Deployment;
-using BuildXL.Cache.ContentStore.Distributed.Utilities;
-using System.Text;
-using ContentStoreTest.Distributed.Redis;
-using Azure.Storage.Blobs;
 
 namespace BuildXL.Cache.ContentStore.Distributed.Test
 {
@@ -47,7 +26,8 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
     public class StorageDeploymentIngesterTests : DeploymentIngesterTestsBase
     {
         protected readonly LocalRedisFixture _fixture;
-        protected Dictionary<string, StorageAccountInfo> storageByAccountName;
+        protected Dictionary<string, StorageAccountInfo> StorageByAccountName;
+        protected StorageDeploymentTargetStore StorageTargetStore;
 
         private readonly List<AzuriteStorageProcess> _storageProcesses = new List<AzuriteStorageProcess>();
 
@@ -104,7 +84,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
         {
             try
             {
-                storageByAccountName ??= CreateStorageMap()
+                StorageByAccountName ??= CreateStorageMap()
                     .SelectMany(kvp => kvp.Value.Select((account, index) => account with { VirtualAccountName = $"{kvp.Key}_{account.ContainerName}", Region = kvp.Key }))
                     .ToDictionary(a => a.VirtualAccountName);
 
@@ -125,27 +105,27 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
 
         protected override DeploymentIngesterConfiguration ConfigureIngester()
         {
-            var storageTargetStore = new StorageDeploymentTargetStore(new(
+            StorageTargetStore = new StorageDeploymentTargetStore(new(
                 baseConfig,
                 new StorageIngesterConfiguration()
                 {
-                    StorageAccountsByRegion = storageByAccountName.Values.GroupBy(a => a.Region).ToDictionary(e => e.Key, e => e.Select(a => a.VirtualAccountName).ToArray()),
+                    StorageAccountsByRegion = StorageByAccountName.Values.GroupBy(a => a.Region).ToDictionary(e => e.Key, e => e.Select(a => a.VirtualAccountName).ToArray()),
                     ContentContainerName = "testcontainer"
                 }));
 
-            storageTargetStore.OverrideGetContainer = t =>
+            StorageTargetStore.OverrideGetContainer = t =>
             {
-                return storageByAccountName[t.accountName].GetContainerAsync();
+                return StorageByAccountName[t.accountName].GetContainerAsync();
             };
 
             return new DeploymentIngesterConfiguration(
                 baseConfig,
-                storageTargetStore);
+                StorageTargetStore);
         }
 
         protected override async Task VerifyContentAsync(ContentHash hash, string expectedContent, string deploymentPath)
         {
-            foreach (var account in storageByAccountName.Values)
+            foreach (var account in StorageByAccountName.Values)
             {
                 var blob = account.Container.GetBlobClient(DeploymentUtilities.GetContentRelativePath(hash).ToString());
                 var content = await blob.DownloadContentAsync();

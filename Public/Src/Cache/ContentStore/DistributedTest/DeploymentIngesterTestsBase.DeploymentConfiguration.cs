@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using BuildXL.Cache.Host.Service;
+using BuildXL.Cache.ContentStore.Distributed.Utilities;
 
 namespace BuildXL.Cache.ContentStore.Distributed.Test;
 
@@ -45,6 +45,7 @@ public partial class DeploymentIngesterTestsBase
                 'Url [Stamp:ST_S3]': 'file://Stamp3',
             }
         ],
+        'KeyVaultUri[ServiceVersion:10]': 'rel/Keys.json',
         'AzureStorageSecretInfo': { 'Name': 'myregionalStorage{Region:LA}', 'TimeToLive':'60m' },
         'SasUrlTimeToLive': '3m',
         'Tool [Environment:MyEnvRunningOnWindows]': {
@@ -53,8 +54,21 @@ public partial class DeploymentIngesterTestsBase
             'Arguments': [ 'myargs' ],
             'EnvironmentVariables': {
                 'ConfigPath': '../Foo.txt'
+            },
+            'SecretEnvironmentVariables': {
+                'TestSecret': { 'TimeToLive':'60m' }
             }
         }
     }
     ".Replace("'", "\"");
+
+    protected const string ExpectedStage2CTestSecretValue = nameof(ExpectedStage2CTestSecretValue);
+    protected const string TestSecretName = "TestSecret";
+
+    protected static readonly string KeysJson = JsonUtilities.JsonSerialize(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { $"{TestSecretName}", "Not overridden secret" },
+        { $"{TestSecretName}[RunKind:Stage2C]", ExpectedStage2CTestSecretValue },
+        { $"{TestSecretName}[RunKind:Stage2D]", "Overridden but not selected" },
+    });
 }

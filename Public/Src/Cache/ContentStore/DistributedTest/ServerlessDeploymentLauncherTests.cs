@@ -83,8 +83,20 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             };
         }
 
+        public override Task TestFullDeployment()
+        {
+            return base.TestFullDeployment();
+        }
+
         protected override async Task PostDeploymentVerifyAsync()
         {
+            var files = WriteFiles(deploymentRoot, new()
+            {
+                { "rel/keys.json", KeysJson }
+            });
+
+            await StorageTargetStore.UploadFileAsync(Context, files[0], "rel/Keys.json").ShouldBeSuccess();
+
             string serviceUrl = "casaas://service";
 
             var settings = new LauncherSettings()
@@ -106,12 +118,13 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                 TargetDirectory = TestRootDirectoryPath.Path
             };
 
-            var deploymentContainer = await storageByAccountName.First().Value.GetContainerAsync();
+            var deploymentContainer = await StorageByAccountName.First().Value.GetContainerAsync();
 
+            var host = new TestHost(deploymentContainer.Uri);
             var launcher = new DeploymentLauncher(
                 settings,
                 FileSystem,
-                new TestHost(deploymentContainer.Uri));
+                host);
 
             using var cts = new CancellationTokenSource();
             var context = new OperationContext(new Context(Logger), cts.Token);
@@ -119,6 +132,8 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             await launcher.StartupAsync(context).ThrowIfFailureAsync();
 
             await launcher.GetDownloadAndRunDeployment(context).ShouldBeSuccess();
+
+            host.Process.VerifyEnvVar(TestSecretName, ExpectedStage2CTestSecretValue);
 
             await launcher.ShutdownAsync(context).ThrowIfFailureAsync();
         }
