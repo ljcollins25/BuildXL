@@ -37,6 +37,7 @@ using AbsolutePath = BuildXL.Cache.ContentStore.Interfaces.FileSystem.AbsolutePa
 using RelativePath = BuildXL.Cache.ContentStore.Interfaces.FileSystem.RelativePath;
 using BuildXL.Cache.Host.Service.Deployment;
 using BuildXL.Cache.ContentStore.Distributed.Utilities;
+using System.IO.Compression;
 
 namespace BuildXL.Cache.ContentStore.Distributed.Test
 {
@@ -51,13 +52,13 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
         protected FuncDeploymentIngesterUrlHander dropHandler;
         protected DeploymentManifest deploymentManifest;
 
+        protected int IngesterRun { get; private set; } = 0;
+
         public const string DropToken = "FAKE_DROP_TOKEN";
         public DeploymentIngesterTestsBase(ITestOutputHelper output)
             : base(TestGlobal.Logger, output)
         {
             Context = new OperationContext(new Interfaces.Tracing.Context(Logger));
-
-            InitializeLayout();
 
             deploymentRoot = TestRootDirectoryPath / "deploy";
 
@@ -69,9 +70,11 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
         }
         [Fact]
         [Trait("Category", "WindowsOSOnly")] // TODO: investigate why
-        public virtual Task TestFullDeployment()
+        public virtual async Task TestFullDeployment()
         {
-            return RunIngestorAndVerifyAsync();
+            await RunIngestorAndVerifyAsync();
+
+            await RunIngestorAndVerifyAsync();
         }
 
         protected virtual DeploymentIngesterConfiguration ConfigureIngester()
@@ -83,14 +86,15 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
 
         public async Task RunIngestorAndVerifyAsync()
         {
+            IngesterRun++;
+
             var configuration = ConfigureIngester();
 
             ingester = new DeploymentIngester(
                 Context,
                 configuration);
 
-            // Write source files
-            WriteFiles(ingester.SourceRoot, sources);
+            InitializeLayout();
 
             FileSystem.WriteAllText(ingester.DeploymentConfigurationPath, ConfigString);
 
@@ -134,15 +138,35 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             return Task.CompletedTask;
         }
 
-        protected IReadOnlyList<AbsolutePath> WriteFiles(AbsolutePath root, Dictionary<string, string> files)
+        protected IReadOnlyList<AbsolutePath> WriteFiles(AbsolutePath target, Dictionary<string, string> files, bool zip = false)
         {
             var paths = new List<AbsolutePath>();
+
+            AbsolutePath targetDir = target;
+            if (zip)
+            {
+                targetDir = FileSystem.GetTempPath() / "ziptemp";
+                if (FileSystem.DirectoryExists(targetDir))
+                {
+                    FileSystem.DeleteDirectory(targetDir, DeleteOptions.All);
+                }
+
+                FileSystem.CreateDirectory(targetDir);
+            }
+
             foreach (var file in files)
             {
-                var path = root / file.Key;
+                var path = targetDir / file.Key;
                 paths.Add(path);
                 FileSystem.CreateDirectory(path.Parent);
                 FileSystem.WriteAllText(path, file.Value);
+            }
+
+            if (zip)
+            {
+                FileSystem.CreateDirectory(target.Parent);
+                FileSystem.DeleteFile(target);
+                ZipFile.CreateFromDirectory(targetDir.Path, target.Path);
             }
 
             return paths;

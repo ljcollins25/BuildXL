@@ -24,6 +24,13 @@ public partial class DeploymentIngesterTestsBase
         { @"Files\Foo.txt", "Bar" },
     };
 
+    protected readonly Dictionary<string, string> zipFileContent = new Dictionary<string, string>()
+    {
+        { @"a.txt", "A" },
+        { @"d1\b.txt", "B" },
+        { @"d1\d2\c.txt", "C" },
+    };
+
     protected readonly Dictionary<string, Dictionary<string, string>> baseUrlDrops = new()
     {
         {
@@ -52,11 +59,23 @@ public partial class DeploymentIngesterTestsBase
         },
     };
 
-    protected Dictionary<string, Dictionary<string, string>> drops;
+    protected Dictionary<string, Dictionary<string, string>> drops = null;
 
     public void InitializeLayout()
     {
-        drops = new()
+        if (IngesterRun == 2)
+        {
+            sources[@"Env\bax.log"] = "Found some files\nto ingest.";
+
+            zipFileContent[@"d1\e.config"] = "<Setting></Setting>";
+        }
+
+        // Write source files
+        WriteFiles(ingester.SourceRoot, sources);
+
+        WriteFiles(ingester.SourceRoot / "zips/app.zip", zipFileContent, zip: true);
+
+        var newDrops = new Dictionary<string, Dictionary<string, string>>()
         {
             {
                 "https://dev.azure.com/buildxlcachetest/drop/drops/dev/testdrop1?root=release/win-x64",
@@ -84,7 +103,7 @@ public partial class DeploymentIngesterTestsBase
                 }
             },
             {
-                "file://Env", getSourceDrop(@"Env\", @"Env\")
+                "file://Env", getSourceDrop(@"Env\")
             },
             {
                 "file://Files/Foo.txt", getSourceDrop(@"Files\Foo.txt", @"Files\")
@@ -93,19 +112,49 @@ public partial class DeploymentIngesterTestsBase
                 "file://Env/Foo.txt", getSourceDrop(@"Env\Foo.txt", @"Env\")
             },
             {
-                "file://Stamp3", getSourceDrop(@"Stamp3\", @"Stamp3\")
+                "file://Stamp3", getSourceDrop(@"Stamp3\")
+            },
+            {
+                "zip.file://zips/app.zip", getZipDrop(@"")
+            },
+            {
+                "zip.file://zips/app.zip?root=d1", getZipDrop(@"d1\")
+            },
+            {
+                "zip.file://zips/app.zip?__root=d1/d2&__snapshot=20240430", getZipDrop(@"d1\d2")
+            },
+            {
+                "zip.file://zips/app.zip?__root=d1/b.txt", getZipDrop(@"d1\b.txt", @"d1\")
             }
         };
+
+        if (drops != null)
+        {
+            foreach (var entry in drops)
+            {
+                if (entry.Key.Contains(DeploymentIngesterUrlHandlerBase.SnapshotQueryKey))
+                {
+                    newDrops[entry.Key] = entry.Value;
+                }
+            }
+        }
+
+        drops = newDrops;
     }
 
-    protected static Dictionary<string, string> getSubDrop(Dictionary<string, string> dropContents, string root, string prefix)
+    protected static Dictionary<string, string> getSubDrop(Dictionary<string, string> dropContents, string root, string prefix = null)
     {
-        root.Should().NotBeNullOrEmpty();
+        root.Should().NotBeNull();
         return dropContents.Where(e => e.Key.StartsWith(root.Replace("/", "\\")))
             .ToDictionary(e => e.Key.Substring((prefix ?? root).Length).TrimStart('\\'), e => e.Value);
     }
 
-    protected Dictionary<string, string> getSourceDrop(string root, string prefix)
+    protected Dictionary<string, string> getZipDrop(string root, string prefix = null)
+    {
+        return getSubDrop(zipFileContent, root, prefix);
+    }
+
+    protected Dictionary<string, string> getSourceDrop(string root, string prefix = null)
     {
         return getSubDrop(sources, root, prefix);
     }

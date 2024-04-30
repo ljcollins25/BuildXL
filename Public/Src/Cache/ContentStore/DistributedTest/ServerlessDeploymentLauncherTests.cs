@@ -83,6 +83,19 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             };
         }
 
+        protected override DeploymentIngesterConfiguration ConfigureIngester()
+        {
+            var result = base.ConfigureIngester();
+
+            var tempZipDir = TestRootDirectoryPath / "tempzip";
+            WriteFiles(tempZipDir, new()
+            {
+                { "a.txt", "A" },
+            });
+
+            return result;
+        }
+
         public override Task TestFullDeployment()
         {
             return base.TestFullDeployment();

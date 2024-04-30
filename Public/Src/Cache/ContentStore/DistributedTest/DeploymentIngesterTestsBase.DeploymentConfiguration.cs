@@ -39,6 +39,12 @@ public partial class DeploymentIngesterTestsBase
                 'Url': 'file://Env',
             },
             {
+                'Url [RunKind:Stage2C]': 'zip.file://zips/app.zip',
+                'Url [RunKind:Stage2C][Stamp:ST_S1]': 'zip.file://zips/app.zip?root=d1',
+                'Url [RunKind:Stage2C][Stamp:ST_S2]': 'zip.file://zips/app.zip?__root=d1/d2&__snapshot=20240430',
+                'Url [RunKind:Stage2C][Stamp:ST_S3]': 'zip.file://zips/app.zip?__root=d1/b.txt',
+            },
+            {
                 'TargetRelativePath': 'info',
                 'Url [Stamp:ST_S1]': 'file://Files/Foo.txt',
                 'Url [Stamp:ST_S2]': 'file://Env/Foo.txt',

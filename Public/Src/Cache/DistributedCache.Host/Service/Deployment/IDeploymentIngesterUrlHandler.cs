@@ -58,7 +58,7 @@ public class FuncDeploymentIngesterUrlHander(
         {
             if (r.Value is AbsolutePath targetDirectory)
             {
-                AddFilesUnderDirectory(targetDirectory, deploymentFiles);
+                AddFilesUnderDirectory(targetDirectory, deploymentFiles, relativeRoot: null);
             }
 
             return BoolResult.Success;
@@ -112,7 +112,7 @@ public class ZipDeploymentIngesterUrlHander(DeploymentIngesterBaseConfiguration 
         FileSystem.CreateDirectory(outputDir);
         ZipFile.ExtractToDirectory(targetPath.Path, outputDir.Path);
 
-        AddFilesUnderDirectory(outputDir, deploymentFiles);
+        AddFilesUnderDirectory(outputDir, deploymentFiles, url.RelativeRoot);
 
         return BoolResult.Success;
     }
@@ -139,15 +139,7 @@ public class FileDeploymentIngesterUrlHander(DeploymentIngesterBaseConfiguration
         else
         {
             var path = url.GetFullPath(SourceRoot);
-            if (FileSystem.DirectoryExists(path))
-            {
-                AddFilesUnderDirectory(path, files);
-            }
-            else
-            {
-                Contract.Assert(FileSystem.FileExists(path));
-                files.Add(new(new RelativePath(path.FileName), path));
-            }
+            AddFilesUnderDirectory(path, files, url.RelativeRoot);
         }
 
         return BoolResult.Success;
@@ -196,8 +188,7 @@ public class DropDeploymentIngesterUrlHandler(AbsolutePath dropExeFilePath, stri
             return new BoolResult($"Process exited with code: {process.ExitCode}");
         }
 
-        var filesRoot = tempDirectory / url.RelativeRoot;
-        AddFilesUnderDirectory(filesRoot, deploymentFiles);
+        AddFilesUnderDirectory(tempDirectory, deploymentFiles, url.RelativeRoot);
 
         return BoolResult.Success;
     }
@@ -205,6 +196,8 @@ public class DropDeploymentIngesterUrlHandler(AbsolutePath dropExeFilePath, stri
 
 public abstract class DeploymentIngesterUrlHandlerBase(DeploymentIngesterBaseConfiguration configuration) : IDeploymentIngesterUrlHandler
 {
+    public const string SnapshotQueryKey = "__snapshot";
+
     public abstract string Name { get; }
 
     public abstract Tracer Tracer { get; }
@@ -239,7 +232,7 @@ public abstract class DeploymentIngesterUrlHandlerBase(DeploymentIngesterBaseCon
         {
             var query = HttpUtility.ParseQueryString(uri.Query);
             relativeRoot = query.Get("__root") ?? query.Get("root") ?? "";
-            hasSnapshot = query.Get("__snapshot") != null;
+            hasSnapshot = query.Get(SnapshotQueryKey) != null;
             foreach (string key in query.AllKeys)
             {
                 if (key.StartsWith("__"))
@@ -262,11 +255,22 @@ public abstract class DeploymentIngesterUrlHandlerBase(DeploymentIngesterBaseCon
         return result;
     }
 
-    protected void AddFilesUnderDirectory(AbsolutePath filesRoot, List<DeploymentFile> deploymentFiles)
+    protected void AddFilesUnderDirectory(AbsolutePath path, List<DeploymentFile> deploymentFiles, string relativeRoot)
     {
-        foreach (var file in FileSystem.EnumerateFiles(filesRoot, EnumerateOptions.Recurse))
+        relativeRoot ??= "";
+        path = path / relativeRoot;
+
+        if (FileSystem.DirectoryExists(path))
         {
-            deploymentFiles.Add(new(GetRelativePath(file.FullPath, parent: filesRoot), file.FullPath));
+            foreach (var file in FileSystem.EnumerateFiles(path, EnumerateOptions.Recurse))
+            {
+                deploymentFiles.Add(new(GetRelativePath(file.FullPath, parent: path), file.FullPath));
+            }
+        }
+        else
+        {
+            Contract.Assert(FileSystem.FileExists(path));
+            deploymentFiles.Add(new(new RelativePath(path.FileName), path));
         }
     }
 
