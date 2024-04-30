@@ -133,6 +133,11 @@ namespace BuildXL.Cache.Host.Configuration
         public string[] Arguments { get; set; } = new string[0];
 
         /// <summary>
+        /// Indicates if environment variables should be cleared before adding those defined in config.
+        /// </summary>
+        public bool ResetEnvironmentVariables { get; set; } = false;
+
+        /// <summary>
         /// Environment variables used when launching the tool
         /// </summary>
         public Dictionary<string, string> EnvironmentVariables { get; set; } = new Dictionary<string, string>();

@@ -70,6 +70,17 @@ namespace BuildXL.Cache.ContentStore.UtilitiesCore.Internal
         }
 
         /// <summary>
+        /// Clears the dictionary
+        /// </summary>
+        public static void Add<T>(this ICollection<T> collection, ClearEntries clear)
+        {
+            if (clear.ShouldClear)
+            {
+                collection.Clear();
+            }
+        }
+
+        /// <summary>
         /// Wraps key value pairs in an <see cref="AddOrSetEntries{TKey, TValue}"/> for use with collection initializer.
         /// </summary>
         public static AddOrSetEntries<TKey, TValue> ToAddOrSetEntries<TKey, TValue>(this IEnumerable<KeyValuePair<TKey, TValue>> entries)
@@ -191,4 +202,9 @@ namespace BuildXL.Cache.ContentStore.UtilitiesCore.Internal
             return comparisonResult == 0 ? null : comparisonResult;
         }
     }
+
+    /// <summary>
+    /// Sentinel for clearing entries in a collection
+    /// </summary>
+    public record struct ClearEntries(bool ShouldClear = true);
 }

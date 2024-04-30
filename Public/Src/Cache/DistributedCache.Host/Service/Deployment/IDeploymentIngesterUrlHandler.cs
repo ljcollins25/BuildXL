@@ -15,7 +15,6 @@ using BuildXL.Cache.ContentStore.Interfaces.Results;
 using BuildXL.Cache.ContentStore.Tracing;
 using BuildXL.Cache.ContentStore.Tracing.Internal;
 using BuildXL.Cache.Host.Service.Deployment;
-using static BuildXL.Cache.Host.Service.FileDeploymentIngesterUrlHander;
 
 namespace BuildXL.Cache.Host.Service;
 
@@ -28,9 +27,19 @@ public interface IDeploymentIngesterUrlHandler
 
 public record struct DeploymentFile(RelativePath DeployedPath, AbsolutePath SourcePath);
 
-public record ParsedDropUrl(IDeploymentIngesterUrlHandler Handler, Uri OriginalUri, Uri EffectiveUrl, string RelativeRoot, bool HasMutableContent = false)
+public record ParsedDropUrl(IDeploymentIngesterUrlHandler Handler, Uri OriginalUri, Uri EffectiveUrl, string RelativeRoot)
 {
-    public bool IsFile => EffectiveUrl.IsFile;
+    public bool IsFile => !EffectiveUrl.IsAbsoluteUri || EffectiveUrl.IsFile || OriginalUri == DeploymentUtilities.ConfigDropUri;
+
+    /// <summary>
+    /// Indicates whether the url represents content which may change.
+    /// </summary>
+    public bool HasMutableContent { get; init; }
+
+    public AbsolutePath GetFullPath(AbsolutePath root)
+    {
+        return root / EffectiveUrl.LocalPath.TrimStart('\\', '/');
+    }
 }
 
 public class FuncDeploymentIngesterUrlHander(
@@ -57,23 +66,46 @@ public class FuncDeploymentIngesterUrlHander(
     }
 }
 
-public class RemoteZipDeploymentIngesterUrlHander(DeploymentIngesterBaseConfiguration configuration)
+public class ZipDeploymentIngesterUrlHander(DeploymentIngesterBaseConfiguration configuration)
     : DeploymentIngesterUrlHandlerBase(configuration)
 {
+    public const string ZipFileScheme = "zip.file";
+    public const string ZipHttpsScheme = "zip.https";
+
     public HttpClient Client { get; } = new();
 
     public override string Name => "zip";
 
-    public override Tracer Tracer { get; } = new Tracer(nameof(RemoteZipDeploymentIngesterUrlHander));
+    public override Tracer Tracer { get; } = new Tracer(nameof(ZipDeploymentIngesterUrlHander));
+
+    protected override void UpdateUriScheme(UriBuilder uri)
+    {
+        if (uri.Scheme == ZipFileScheme)
+        {
+            uri.Scheme = "file";
+            return;
+        }
+
+        base.UpdateUriScheme(uri);
+    }
+
+    public static void AddHandlers(DeploymentIngesterConfiguration configuration)
+    {
+        var handler = new ZipDeploymentIngesterUrlHander(configuration);
+        configuration.HandlerByScheme.TryAdd(ZipFileScheme, handler);
+        configuration.HandlerByScheme.TryAdd(ZipHttpsScheme, handler);
+    }
 
     public override async Task<BoolResult> GetFilesAsync(OperationContext context, ParsedDropUrl url, AbsolutePath tempDirectory, List<DeploymentFile> deploymentFiles)
     {
         var targetPath = tempDirectory / "download.zip";
 
         using (var target = FileSystem.OpenForWrite(targetPath, null, FileMode.Create, FileShare.Delete))
-        using (var source = await Client.GetStreamAsync(url.EffectiveUrl))
+        using (var source = url.IsFile
+            ? FileSystem.OpenReadOnly(url.GetFullPath(SourceRoot), FileShare.Read)
+            : await Client.GetStreamAsync(url.EffectiveUrl))
         {
-            await source.CopyToAsync(target, 1 << 10);
+            await source.CopyToAsync(target, ushort.MaxValue);
         }
 
         var outputDir = tempDirectory / "extract";
@@ -95,29 +127,18 @@ public class FileDeploymentIngesterUrlHander(DeploymentIngesterBaseConfiguration
 
     protected override void UpdateUriScheme(UriBuilder uri)
     {
-    }
-
-    public override ParsedDropUrl Parse(Uri url)
-    {
-        var result = base.Parse(url);
-
-        result = result with
-        {
-            HasMutableContent = true
-        };
-
-        return result;
+        // Don't modify the scheme
     }
 
     public override async Task<BoolResult> GetFilesAsync(OperationContext context, ParsedDropUrl url, AbsolutePath tempDirectory, List<DeploymentFile> files)
     {
-        if (url.EffectiveUrl == DeploymentUtilities.ConfigDropUri)
+        if (url.OriginalUri == DeploymentUtilities.ConfigDropUri)
         {
             files.Add(new(new RelativePath(DeploymentUtilities.DeploymentConfigurationFileName), Configuration.DeploymentConfigurationPath));
         }
         else
         {
-            var path = SourceRoot / url.EffectiveUrl.LocalPath.TrimStart('\\', '/');
+            var path = url.GetFullPath(SourceRoot);
             if (FileSystem.DirectoryExists(path))
             {
                 AddFilesUnderDirectory(path, files);
@@ -205,6 +226,7 @@ public abstract class DeploymentIngesterUrlHandlerBase(DeploymentIngesterBaseCon
 
     public abstract Task<BoolResult> GetFilesAsync(OperationContext context, ParsedDropUrl url, AbsolutePath tempDirectory, List<DeploymentFile> deploymentFiles);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("CodeSmell", "EPC20:Avoid using default ToString implementation", Justification = "HttpUtility.ParseQueryString returns a collection whose ToString() returns a value query string representation")]
     public virtual ParsedDropUrl Parse(Uri url)
     {
         var uri = new UriBuilder(url);
@@ -212,13 +234,32 @@ public abstract class DeploymentIngesterUrlHandlerBase(DeploymentIngesterBaseCon
         UpdateUriScheme(uri);
 
         string relativeRoot = "";
+        bool hasSnapshot = false;
         if (!string.IsNullOrEmpty(uri.Query))
         {
             var query = HttpUtility.ParseQueryString(uri.Query);
-            relativeRoot = query.Get("root") ?? "";
+            relativeRoot = query.Get("__root") ?? query.Get("root") ?? "";
+            hasSnapshot = query.Get("__snapshot") != null;
+            foreach (string key in query.AllKeys)
+            {
+                if (key.StartsWith("__"))
+                {
+                    query.Remove(key);
+                }
+            }
+
+            uri.Query = query.ToString();
         }
 
-        return new ParsedDropUrl(this, OriginalUri: originalUri, EffectiveUrl: uri.Uri, relativeRoot);
+        var result = new ParsedDropUrl(this, OriginalUri: originalUri, EffectiveUrl: uri.Uri, relativeRoot);
+        if (result.IsFile && !hasSnapshot)
+        {
+            // Unless snapshot parameters is added. File uris are considered to represent mutable content
+            // by default.
+            result = result with { HasMutableContent = true };
+        }
+
+        return result;
     }
 
     protected void AddFilesUnderDirectory(AbsolutePath filesRoot, List<DeploymentFile> deploymentFiles)

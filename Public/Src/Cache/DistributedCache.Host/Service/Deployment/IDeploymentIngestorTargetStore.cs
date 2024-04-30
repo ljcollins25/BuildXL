@@ -44,5 +44,7 @@ namespace BuildXL.Cache.Host.Service
         Task<IEnumerable<Indexed<bool>>> PinAsync(OperationContext context, IReadOnlyList<ContentHash> hashes);
 
         Task<PutResult> PutFileAsync(OperationContext context, AbsolutePath sourcePath);
+
+        Task<BoolResult> FinalizeIngestionAsync(OperationContext context);
     }
 }

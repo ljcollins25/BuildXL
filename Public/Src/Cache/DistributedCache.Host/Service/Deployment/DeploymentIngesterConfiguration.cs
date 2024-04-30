@@ -22,7 +22,7 @@ namespace BuildXL.Cache.Host.Service.Deployment
 
         public DeploymentIngesterConfiguration PopulateDefaultHandlers(string dropExeFilePath, string dropToken)
         {
-            if (string.IsNullOrEmpty(dropExeFilePath) && !string.IsNullOrEmpty(dropToken))
+            if (!string.IsNullOrEmpty(dropExeFilePath) && !string.IsNullOrEmpty(dropToken))
             {
                 HandlerByScheme["https"] = new DropDeploymentIngesterUrlHandler(new AbsolutePath(dropExeFilePath), dropToken, this);
             }
@@ -35,7 +35,7 @@ namespace BuildXL.Cache.Host.Service.Deployment
             var fileHandler = new FileDeploymentIngesterUrlHander(this);
             HandlerByScheme.TryAdd("config", fileHandler);
             HandlerByScheme.TryAdd("file", fileHandler);
-            HandlerByScheme.TryAdd("zip", new RemoteZipDeploymentIngesterUrlHander(this));
+            ZipDeploymentIngesterUrlHander.AddHandlers(this);
             return this;
         }
     }

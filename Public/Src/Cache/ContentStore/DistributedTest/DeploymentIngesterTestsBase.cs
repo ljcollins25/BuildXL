@@ -96,7 +96,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
 
             dropHandler = new FuncDeploymentIngesterUrlHander(configuration, "TestDropHandler", t =>
             {
-                var dropContents = getDropContents(t.url.EffectiveUrl.ToString(), t.url.RelativeRoot);
+                var dropContents = getDropContents(t.url.OriginalUri.ToString(), t.url.RelativeRoot);
                 AbsolutePath root = t.tempDirectory / (t.url.RelativeRoot ?? "");
                 WriteFiles(root, dropContents);
                 return Result.SuccessTask(root);

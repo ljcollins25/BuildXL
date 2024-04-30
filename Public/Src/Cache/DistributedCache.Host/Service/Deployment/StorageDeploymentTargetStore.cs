@@ -65,7 +65,7 @@ namespace BuildXL.Cache.Host.Service
             return BoolResult.Success;
         }
 
-        protected override async Task<BoolResult> ShutdownComponentAsync(OperationContext context)
+        public async Task<BoolResult> FinalizeIngestionAsync(OperationContext context)
         {
             return await context.PerformOperationAsync(
                 Tracer,

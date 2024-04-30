@@ -717,6 +717,8 @@ namespace BuildXL.Cache.Host.Service
                                         Arguments = string.Join(" ", arguments),
                                         Environment =
                                         {
+                                            new ClearEntries(ShouldClear: tool.ResetEnvironmentVariables),
+
                                             // Launcher hashes the configuration file and computes the ConfigurationId properly manually
                                             // because the launcher manages its own configuration in a separate repo,
                                             // so we don't need to propagate the ConfigurationId from CloudBuildConfig repo.

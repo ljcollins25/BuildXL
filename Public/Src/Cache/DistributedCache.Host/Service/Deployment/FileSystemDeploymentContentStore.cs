@@ -81,5 +81,7 @@ namespace BuildXL.Cache.Host.Service
 
             return result;
         }
+
+        public Task<BoolResult> FinalizeIngestionAsync(OperationContext context) => BoolResult.SuccessTask;
     }
 }

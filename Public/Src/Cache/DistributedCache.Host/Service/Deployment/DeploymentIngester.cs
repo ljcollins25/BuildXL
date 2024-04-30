@@ -157,6 +157,8 @@ namespace BuildXL.Cache.Host.Service
 
                     // Write the updated deployment describing files in drop
                     WriteDeploymentManifest();
+
+                    await Store.FinalizeIngestionAsync(Context).ThrowIfFailure();
                 }
                 finally
                 {
