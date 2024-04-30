@@ -132,7 +132,8 @@ namespace BuildXL.Cache.Host.Service
 
         public Task<IEnumerable<Indexed<bool>>> PinAsync(OperationContext context, IReadOnlyList<ContentHash> hashes)
         {
-            return Task.FromResult(Enumerable.Empty<Indexed<bool>>());
+            // Assume that all hashes are present
+            return Task.FromResult(hashes.Select((h, i) => new Indexed<bool>(true, i)));
         }
 
         public Task<PutResult> PutFileAsync(OperationContext context, AbsolutePath sourcePath)

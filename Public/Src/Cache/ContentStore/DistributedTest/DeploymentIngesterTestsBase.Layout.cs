@@ -67,7 +67,7 @@ public partial class DeploymentIngesterTestsBase
         {
             sources[@"Env\bax.log"] = "Found some files\nto ingest.";
 
-            zipFileContent[@"d1\e.config"] = "<Setting></Setting>";
+            zipFileContent[@"d1\d2\e.config"] = "<Setting></Setting>";
         }
 
         // Write source files

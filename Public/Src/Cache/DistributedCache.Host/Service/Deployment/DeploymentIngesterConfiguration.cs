@@ -47,6 +47,11 @@ namespace BuildXL.Cache.Host.Service.Deployment
         IAbsFileSystem FileSystem,
         ActionQueue ActionQueue = null)
     {
+        /// <summary>
+        /// Indicates whether ingester should skip Pin check to see if content exists in store and always attempt to upload content.
+        /// </summary>
+        public bool ForceUploadContent { get; set; }
+
         public AbsolutePath DeploymentManifestPath { get; } = DeploymentUtilities.GetDeploymentManifestPath(DeploymentRoot);
 
         public ActionQueue ActionQueue { get; } = ActionQueue ?? new ActionQueue(Environment.ProcessorCount);

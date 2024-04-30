@@ -27,14 +27,9 @@ public interface IDeploymentIngesterUrlHandler
 
 public record struct DeploymentFile(RelativePath DeployedPath, AbsolutePath SourcePath);
 
-public record ParsedDropUrl(IDeploymentIngesterUrlHandler Handler, Uri OriginalUri, Uri EffectiveUrl, string RelativeRoot)
+public record ParsedDropUrl(IDeploymentIngesterUrlHandler Handler, Uri OriginalUri, Uri EffectiveUrl, string RelativeRoot, bool HasMutableContent = true)
 {
     public bool IsFile => !EffectiveUrl.IsAbsoluteUri || EffectiveUrl.IsFile || OriginalUri == DeploymentUtilities.ConfigDropUri;
-
-    /// <summary>
-    /// Indicates whether the url represents content which may change.
-    /// </summary>
-    public bool HasMutableContent { get; init; }
 
     public AbsolutePath GetFullPath(AbsolutePath root)
     {
@@ -153,6 +148,15 @@ public class DropDeploymentIngesterUrlHandler(AbsolutePath dropExeFilePath, stri
 
     public override Tracer Tracer { get; } = new Tracer(nameof(DropDeploymentIngesterUrlHandler));
 
+    public override ParsedDropUrl Parse(Uri url)
+    {
+        return base.Parse(url) with
+        {
+            // Drops are immutable.
+            HasMutableContent = false
+        };
+    }
+
     public override async Task<BoolResult> GetFilesAsync(OperationContext context, ParsedDropUrl url, AbsolutePath tempDirectory, List<DeploymentFile> deploymentFiles)
     {
         var args = $@"get -u {url.EffectiveUrl} -d ""{tempDirectory}"" --patAuth {dropToken}";
@@ -227,12 +231,12 @@ public abstract class DeploymentIngesterUrlHandlerBase(DeploymentIngesterBaseCon
         UpdateUriScheme(uri);
 
         string relativeRoot = "";
-        bool hasSnapshot = false;
+        bool isSnapshot = false;
         if (!string.IsNullOrEmpty(uri.Query))
         {
             var query = HttpUtility.ParseQueryString(uri.Query);
             relativeRoot = query.Get("__root") ?? query.Get("root") ?? "";
-            hasSnapshot = query.Get(SnapshotQueryKey) != null;
+            isSnapshot = query.Get(SnapshotQueryKey) != null;
             foreach (string key in query.AllKeys)
             {
                 if (key.StartsWith("__"))
@@ -244,14 +248,7 @@ public abstract class DeploymentIngesterUrlHandlerBase(DeploymentIngesterBaseCon
             uri.Query = query.ToString();
         }
 
-        var result = new ParsedDropUrl(this, OriginalUri: originalUri, EffectiveUrl: uri.Uri, relativeRoot);
-        if (result.IsFile && !hasSnapshot)
-        {
-            // Unless snapshot parameters is added. File uris are considered to represent mutable content
-            // by default.
-            result = result with { HasMutableContent = true };
-        }
-
+        var result = new ParsedDropUrl(this, OriginalUri: originalUri, EffectiveUrl: uri.Uri, relativeRoot, HasMutableContent: !isSnapshot);
         return result;
     }
 

@@ -13,6 +13,9 @@ namespace BuildXL.Cache.Host.Service
 {
     public interface IDeploymentIngestorTargetStore : IStartupShutdownSlim
     {
+        /// <summary>
+        /// Checks if hashes from loaded deployment manifest exist in the store
+        /// </summary>
         Task<IEnumerable<Indexed<bool>>> PinAsync(OperationContext context, IReadOnlyList<ContentHash> hashes);
 
         Task<PutResult> PutFileAsync(OperationContext context, AbsolutePath sourcePath);

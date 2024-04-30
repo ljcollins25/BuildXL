@@ -114,6 +114,8 @@ namespace BuildXL.Cache.Host.Service
 
             public ParsedDropUrl ParsedUrl { get; set; }
 
+            public bool IsLoadedFromPriorManifest { get; set; }
+
             public List<FileSpec> Files { get; } = new List<FileSpec>();
 
             public string ToHeaderString()
@@ -304,6 +306,7 @@ namespace BuildXL.Cache.Host.Service
                 {
                     if (Drops.TryGetValue(dropEntry.Key, out var layout))
                     {
+                        layout.IsLoadedFromPriorManifest = true;
                         foreach (var fileEntry in dropEntry.Value)
                         {
                             var fileSpec = fileEntry.Value;
@@ -335,15 +338,18 @@ namespace BuildXL.Cache.Host.Service
         {
             return Context.PerformOperationAsync(Tracer, async () =>
             {
-                var hashes = Drops.Values.SelectMany(d => d.Files.Select(f => f.Hash)).ToList();
-
-                var pinResults = await Store.PinAsync(Context, hashes);
-
-                foreach (var pinResult in pinResults)
+                if (!Configuration.ForceUploadContent)
                 {
-                    if (pinResult.Item)
+                    var hashes = Drops.Values.SelectMany(d => d.Files.Select(f => f.Hash)).ToList();
+
+                    var pinResults = await Store.PinAsync(Context, hashes);
+
+                    foreach (var pinResult in pinResults)
                     {
-                        PinHashes.Add(hashes[pinResult.Index]);
+                        if (pinResult.Item)
+                        {
+                            PinHashes.Add(hashes[pinResult.Index]);
+                        }
                     }
                 }
 
@@ -376,7 +382,7 @@ namespace BuildXL.Cache.Host.Service
                 // changes from last ingestion
                 if (!drop.ParsedUrl.HasMutableContent)
                 {
-                    if (drop.Files.Count != 0 && drop.Files.All(f => PinHashes.Contains(f.Hash)))
+                    if (drop.IsLoadedFromPriorManifest && drop.Files.All(f => PinHashes.Contains(f.Hash)))
                     {
                         // If we loaded prior drop info and all drop contents are present in cache, just skip
                         return BoolResult.Success;
