@@ -105,6 +105,11 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
 
         protected override DeploymentIngesterConfiguration ConfigureIngester()
         {
+            if (StorageByAccountName.Count == 0)
+            {
+                return base.ConfigureIngester();
+            }
+
             StorageTargetStore = new StorageDeploymentTargetStore(new(
                 baseConfig,
                 new StorageIngesterConfiguration()

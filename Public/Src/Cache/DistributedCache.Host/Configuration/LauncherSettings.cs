@@ -26,6 +26,11 @@ namespace BuildXL.Cache.Host.Configuration
         public string ServiceUrl { get; set; }
 
         /// <summary>
+        /// Indicates whether <see cref="ServiceUrl"/> represents a file server.
+        /// </summary>
+        public bool IsFileServer { get; set; }
+
+        /// <summary>
         /// The interval in which to query for deployment updates
         /// </summary>
         public double QueryIntervalSeconds { get; set; } = 300;

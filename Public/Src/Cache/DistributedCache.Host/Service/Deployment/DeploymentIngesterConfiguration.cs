@@ -9,6 +9,7 @@ using System.Web;
 using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 using BuildXL.Cache.ContentStore.Interfaces.Results;
 using BuildXL.Cache.Host.Service;
+using BuildXL.Utilities.Collections;
 using BuildXL.Utilities.ParallelAlgorithms;
 
 namespace BuildXL.Cache.Host.Service.Deployment

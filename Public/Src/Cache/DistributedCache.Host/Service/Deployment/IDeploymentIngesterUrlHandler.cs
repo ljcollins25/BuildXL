@@ -15,6 +15,7 @@ using BuildXL.Cache.ContentStore.Interfaces.Results;
 using BuildXL.Cache.ContentStore.Tracing;
 using BuildXL.Cache.ContentStore.Tracing.Internal;
 using BuildXL.Cache.Host.Service.Deployment;
+using BuildXL.Utilities.Collections;
 
 namespace BuildXL.Cache.Host.Service;
 

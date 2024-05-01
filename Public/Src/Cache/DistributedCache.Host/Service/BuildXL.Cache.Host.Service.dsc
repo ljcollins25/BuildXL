@@ -39,6 +39,8 @@ namespace Service {
             ...BuildXLSdk.bclAsyncPackages,
 
             ...addIf(BuildXLSdk.isFullFramework,
+                NetFx.System.IO.Compression.dll,
+                NetFx.System.IO.Compression.FileSystem.dll,
                 NetFx.System.Web.dll,
                 NetFx.System.Net.Http.dll,
                 NetFx.System.Xml.dll

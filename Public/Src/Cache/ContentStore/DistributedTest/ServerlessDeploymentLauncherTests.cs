@@ -54,6 +54,8 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
     [Collection("Redis-based tests")]
     public class ServerlessDeploymentLauncherTests : StorageDeploymentIngesterTests
     {
+        public bool UseFileUri { get; set; }
+
         public ServerlessDeploymentLauncherTests(LocalRedisFixture fixture, ITestOutputHelper output)
             : base(fixture, output)
         {
@@ -61,6 +63,11 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
 
         protected override Dictionary<string, StorageAccountInfo[]> CreateStorageMap()
         {
+            if (UseFileUri)
+            {
+                return new();
+            }
+
             var s1 = CreateStorageProcess();
             var s2 = CreateStorageProcess();
 
@@ -101,6 +108,13 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             return base.TestFullDeployment();
         }
 
+        [Fact]
+        public Task TestFullDeploymentFsMode()
+        {
+            UseFileUri = true;
+            return base.TestFullDeployment();
+        }
+
         protected override async Task PostDeploymentVerifyAsync()
         {
             var files = WriteFiles(deploymentRoot, new()
@@ -108,7 +122,10 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                 { "rel/keys.json", KeysJson }
             });
 
-            await StorageTargetStore.UploadFileAsync(Context, files[0], "rel/Keys.json").ShouldBeSuccess();
+            if (!UseFileUri)
+            {
+                await StorageTargetStore.UploadFileAsync(Context, files[0], "rel/Keys.json").ShouldBeSuccess();
+            }
 
             string serviceUrl = "casaas://service";
 
@@ -131,9 +148,11 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                 TargetDirectory = TestRootDirectoryPath.Path
             };
 
-            var deploymentContainer = await StorageByAccountName.First().Value.GetContainerAsync();
+            var deploymentContainerUri = UseFileUri
+                ? new UriBuilder() { Scheme = "file", Host = null, Path = deploymentRoot.Path }.Uri
+                : await StorageByAccountName.First().Value.GetContainerAsync().SelectResult(c => c.Uri);
 
-            var host = new TestHost(deploymentContainer.Uri);
+            var host = new TestHost(deploymentContainerUri);
             var launcher = new DeploymentLauncher(
                 settings,
                 FileSystem,
@@ -153,7 +172,7 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
     }
 
     public class TestHost(Uri deploymentRootUri)
-        : DeploymentLauncherHost(new AzureDeploymentRestClient(deploymentRootUri))
+        : DeploymentLauncherHost(new FileServerDeploymentClient(deploymentRootUri))
     {
         public TestProcess Process { get; set; }
 

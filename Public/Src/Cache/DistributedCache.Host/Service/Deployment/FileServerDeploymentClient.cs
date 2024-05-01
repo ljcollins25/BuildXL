@@ -3,12 +3,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.ContractsLight;
 using System.IO;
+using System.Net;
 using System.Net.Http;
-using System.Reflection.Metadata;
 using System.Text.Json;
 using System.Threading.Tasks;
 using BuildXL.Cache.ContentStore.Hashing;
@@ -22,18 +21,18 @@ namespace BuildXL.Cache.Host.Service
 {
     /// <summary>
     /// Provides implementation of <see cref="IDeploymentServiceInnerClient"/> using direct http rest operations
-    /// against an azure file share or blob storage
+    /// against an azure file share, blob storage, and other standard static file servers
     /// </summary>
-    public class AzureDeploymentRestClient : IDeploymentServiceInnerClient, IDeploymentProcessorHost<Unit>
+    public class FileServerDeploymentClient : IDeploymentServiceInnerClient, IDeploymentProcessorHost<Unit>
     {
         private readonly DeploymentProcessor<Unit> _processor;
 
         private readonly Uri _sasUri;
         private readonly Uri _manifestUri;
 
-        private readonly HttpClient _client = new();
+        private readonly ClientWrapper _client = new();
 
-        public AzureDeploymentRestClient(Uri sasUri)
+        public FileServerDeploymentClient(Uri sasUri)
         {
             _processor = new(this);
             _sasUri = sasUri;
@@ -41,7 +40,7 @@ namespace BuildXL.Cache.Host.Service
             _manifestUri = GetUri(DeploymentUtilities.DeploymentManifestRelativePath.Path);
         }
 
-        public Tracer Tracer { get; } = new Tracer(nameof(AzureDeploymentRestClient));
+        public Tracer Tracer { get; } = new Tracer(nameof(FileServerDeploymentClient));
 
         public void Dispose()
         {
@@ -84,7 +83,8 @@ namespace BuildXL.Cache.Host.Service
 
         public async Task<string> GetChangeIdAsync(OperationContext context, LauncherSettings settings)
         {
-            var response = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Head, _manifestUri));
+            var request = new HttpRequestMessage(HttpMethod.Head, _manifestUri);
+            HttpResponseMessage response = await _client.SendAsync(request);
             response.EnsureSuccessStatusCode();
             return GetChangeId(response);
         }
@@ -117,10 +117,11 @@ namespace BuildXL.Cache.Host.Service
 
         private async Task<T> ReadJsonAsync<T>(Uri uri, Action<T, HttpResponseMessage> handleResponse = null, HostParameters preprocessParameters = null)
         {
-            var response = await _client.GetAsync(uri);
+            var response = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Get, uri));
             response.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync();
+            using var content = response.Content;
+            var json = await content.ReadAsStringAsync();
             if (preprocessParameters != null)
             {
                 json = DeploymentUtilities.Preprocess(json, preprocessParameters);
@@ -141,7 +142,7 @@ namespace BuildXL.Cache.Host.Service
 
         public async Task<ISecretsProvider> GetSecretsProviderAsync(OperationContext context, string keyVaultUri, HostParameters parameters)
         {
-            IReadOnlyDictionary<string, string> secrets = ImmutableDictionary<string, string>.Empty;
+            IReadOnlyDictionary<string, string> secrets = new Dictionary<string, string>();
             if (!string.IsNullOrEmpty(keyVaultUri))
             {
                 var uri = new Uri(keyVaultUri, UriKind.RelativeOrAbsolute);
@@ -157,9 +158,10 @@ namespace BuildXL.Cache.Host.Service
             return new InMemorySecretsProvider(secrets);
         }
 
-        public Task<Stream> GetStreamAsync(OperationContext context, string downloadUrl)
+        public async Task<Stream> GetStreamAsync(OperationContext context, string downloadUrl)
         {
-            return _client.GetStreamAsync(downloadUrl);
+            var response = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Get, downloadUrl));
+            return await response.Content.ReadAsStreamAsync();
         }
 
         public Task<string> GetProxyBaseAddressAsync(OperationContext context, DeploymentConfigurationResult configuration, HostParameters parameters)
@@ -171,6 +173,32 @@ namespace BuildXL.Cache.Host.Service
         {
             // This should not actually be called by the launcher
             throw Contract.AssertFailure("This method should not be called.");
+        }
+
+        private class ClientWrapper
+        {
+            private readonly HttpClient _client = new HttpClient();
+
+            public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request)
+            {
+                if (request.RequestUri.IsFile)
+                {
+                    var response = new HttpResponseMessage(HttpStatusCode.OK);
+                    var fileInfo = new FileInfo(request.RequestUri.LocalPath);
+                    var etag = fileInfo.LastWriteTimeUtc.ToReadableString();
+                    response.Headers.ETag = new($@"""{etag}""");
+                    if (request.Method != HttpMethod.Head)
+                    {
+                        Contract.Assert(request.Method == HttpMethod.Get);
+                        var stream = File.OpenRead(fileInfo.FullName);
+                        response.Content = new StreamContent(stream);
+                    }
+
+                    return response;
+                }
+
+                return await _client.SendAsync(request);
+            }
         }
 
         private class CaseInsensitiveMap() : Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

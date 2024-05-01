@@ -82,7 +82,7 @@ namespace BuildXL.Cache.Host.Service
             var outputMessagesNagleQueue = NagleQueue<string>.Create(
                 messages =>
                 {
-                    _tracer.Debug(context, $"Service Output: {string.Join(Environment.NewLine, messages)}");
+                    _tracer.Debug(context, string.Join(Environment.NewLine, messages), "ServiceOutput");
                     return Task.CompletedTask;
                 },
                 maxDegreeOfParallelism: 1, interval: TimeSpan.FromSeconds(1), batchSize: 1024);
@@ -90,7 +90,7 @@ namespace BuildXL.Cache.Host.Service
             var errorMessagesNagleQueue = NagleQueue<string>.Create(
                 messages =>
                 {
-                    _tracer.Error(context, $"Service Error: {string.Join(Environment.NewLine, messages)}");
+                    _tracer.Error(context, string.Join(Environment.NewLine, messages), "ServiceError");
                     return Task.CompletedTask;
                 },
                 maxDegreeOfParallelism: 1, interval: TimeSpan.FromSeconds(1), batchSize: 1024);

@@ -128,6 +128,12 @@ namespace BuildXL.Cache.Host.Configuration
         public string Executable { get; set; }
 
         /// <summary>
+        /// Indicates if tool path should be resolved. Otherwise tool will use default execution behavior (i.e.
+        /// search PATH variable for tool)
+        /// </summary>
+        public bool ResolveToolPath { get; set; } = true;
+
+        /// <summary>
         /// Arguments used when launching the tool
         /// </summary>
         public string[] Arguments { get; set; } = new string[0];

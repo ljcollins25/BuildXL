@@ -36,8 +36,8 @@ namespace BuildXL.Cache.ContentStore.App
             [Required, Description("Location where loose source files should be drawn from.")] string sourceRoot,
             [Required, Description("Target directory for deployment.")] string targetDirectory,
             [Required, Description("Location of deployment manifest json file")] string deploymentConfigPath,
-            [Required, Description("Location of drop.exe to run to download drops")] string dropExePath,
-            [Required, Description("Personal access token to use to authenticate to drop service")] string dropToken,
+            [Description("Location of drop.exe to run to download drops")] string dropExePath,
+            [Description("Personal access token to use to authenticate to drop service")] string dropToken,
             [Description("Maximum size of files to retain"), DefaultValue(50)] int retentionSizeGb)
         {
             try
