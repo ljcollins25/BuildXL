@@ -54,6 +54,7 @@ namespace BuildXL.Cache.ContentStore.App
                 }
 
                 settings.ServiceUrl = serviceUrl ?? settings.ServiceUrl;
+                settings.DeploymentParameters ??= new();
 
                 var launcher = new DeploymentLauncher(settings, _fileSystem);
 
@@ -70,7 +71,11 @@ namespace BuildXL.Cache.ContentStore.App
 
                     
                     var host = new EnvironmentVariableHost(tracingContext);
-                    settings.DeploymentParameters.AuthorizationSecret ??= await host.GetPlainSecretAsync(settings.DeploymentParameters.AuthorizationSecretName, _cancellationToken);
+
+                    if (!string.IsNullOrEmpty(settings.DeploymentParameters.AuthorizationSecretName))
+                    {
+                        settings.DeploymentParameters.AuthorizationSecret ??= await host.GetPlainSecretAsync(settings.DeploymentParameters.AuthorizationSecretName, _cancellationToken);
+                    }
                     
                     var telemetryFieldsProvider = new HostTelemetryFieldsProvider(settings.DeploymentParameters)
                     {
