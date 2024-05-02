@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -256,49 +257,51 @@ namespace BuildXL.Cache.Host.Service
             return preprocessedJson;
         }
 
+
+        
+
         /// <summary>
         /// Gets a json preprocessor for the given host parameters
         /// </summary>
         public static JsonPreprocessor GetHostJsonPreprocessor(HostParameters parameters)
         {
+            var commonProperties = new Dictionary<string, string>()
+            {
+                { "Stamp", parameters.Stamp },
+                { "OperatingSystem", parameters.OS },
+                { "OS", parameters.OS },
+                { "Env", parameters.Environment },
+                { "Environment", parameters.Environment },
+                { "Machine", parameters.Machine },
+                { "Region", parameters.Region },
+                { "Ring", parameters.Ring },
+                { "BuildXLVersion", Utilities.Branding.Version },
+                { "UtcNow", parameters.UtcNow.ToReadableString() },
+                { "ServiceVersion", parameters.ServiceVersion },
+            };
+
             return new JsonPreprocessor(
                 constraintDefinitions: new Dictionary<string, string>()
                     {
-                        { "Stamp", parameters.Stamp },
                         { "MachineFunction", parameters.MachineFunction },
-                        { "Region", parameters.Region },
-                        { "Ring", parameters.Ring },
-                        { "Environment", parameters.Environment },
-                        { "Env", parameters.Environment },
-                        { "Machine", parameters.Machine },
                         { "MachineFraction", parameters.Machine?.ComputeContentHashFraction().ToString("f8") /* Fraction with 8 point precision i.e. 0.12345678 */ },
-                        { "ServiceVersion", parameters.ServiceVersion },
-                        { "UtcNow", parameters.UtcNow.ToReadableString() },
-                        { "BuildXLVersion", Utilities.Branding.Version },
 
                         // Backward compatibility where machine function was not
                         // its own constraint
                         { "Feature", parameters.MachineFunction == null ? null : "MachineFunction_" + parameters.MachineFunction },
                     }
+                    .ConcatIfNotNull(commonProperties)
                     .ConcatIfNotNull(parameters.Properties)
                     .Where(e => !string.IsNullOrEmpty(e.Value))
                     .Select(e => new ConstraintDefinition(e.Key, new[] { e.Value }))
                     .ConcatIfNotNull(parameters.Flags?.Where(f => f.Value != null).Select(f => new ConstraintDefinition(f.Key, f.Value))),
                 replacementMacros: new Dictionary<string, string>()
                     {
-                        { "Env", parameters.Environment },
-                        { "Environment", parameters.Environment },
-                        { "Machine", parameters.Machine },
-                        { "Stamp", parameters.Stamp },
                         { "StampId", parameters.Stamp },
-                        { "Region", parameters.Region },
                         { "RegionId", parameters.Region },
-                        { "Ring", parameters.Ring },
-                        { "ServiceVersion", parameters.ServiceVersion },
                         { "ServiceDir", parameters.ServiceDir },
-                        { "UtcNow", parameters.UtcNow.ToReadableString() },
-                        { "BuildXLVersion", Utilities.Branding.Version },
                     }
+                .ConcatIfNotNull(commonProperties)
                 .ConcatIfNotNull(parameters.Properties)
                 .Concat(GetEnvironmentVariableMacros())
                 .Where(e => !string.IsNullOrEmpty(e.Value)));

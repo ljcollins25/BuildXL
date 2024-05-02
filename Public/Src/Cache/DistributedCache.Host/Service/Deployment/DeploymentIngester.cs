@@ -338,18 +338,15 @@ namespace BuildXL.Cache.Host.Service
         {
             return Context.PerformOperationAsync(Tracer, async () =>
             {
-                if (!Configuration.ForceUploadContent)
+                var hashes = Drops.Values.SelectMany(d => d.Files.Select(f => f.Hash)).ToList();
+
+                var pinResults = await Store.PinAsync(Context, hashes);
+
+                foreach (var pinResult in pinResults)
                 {
-                    var hashes = Drops.Values.SelectMany(d => d.Files.Select(f => f.Hash)).ToList();
-
-                    var pinResults = await Store.PinAsync(Context, hashes);
-
-                    foreach (var pinResult in pinResults)
+                    if (pinResult.Item)
                     {
-                        if (pinResult.Item)
-                        {
-                            PinHashes.Add(hashes[pinResult.Index]);
-                        }
+                        PinHashes.Add(hashes[pinResult.Index]);
                     }
                 }
 
@@ -380,7 +377,7 @@ namespace BuildXL.Cache.Host.Service
 
                 // Can't skip mutable drops (i.e. normal local file drops) since the contents may have
                 // changes from last ingestion
-                if (!drop.ParsedUrl.HasMutableContent)
+                if (!Configuration.ForceUploadContent && !drop.ParsedUrl.HasMutableContent)
                 {
                     if (drop.IsLoadedFromPriorManifest && drop.Files.All(f => PinHashes.Contains(f.Hash)))
                     {
@@ -429,8 +426,8 @@ namespace BuildXL.Cache.Host.Service
                 return result;
             },
             traceOperationStarted: true,
-            extraStartMessage: $"Path={file.SourcePath}",
-            extraEndMessage: r => $"Path={file.SourcePath}"
+            extraStartMessage: $"Index={index} Path={file.SourcePath}",
+            extraEndMessage: r => $"Index={index} Path={file.SourcePath}"
             ).ThrowIfFailureAsync();
         }
 

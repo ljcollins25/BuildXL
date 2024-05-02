@@ -16,5 +16,10 @@ namespace BuildXL.Cache.Host.Configuration
         /// Configure the logging behavior for the service
         /// </summary>
         public LoggingSettings? LoggingSettings { get; set; } = null;
+
+        /// <summary>
+        /// Indicates whether environment variables should be expanded in the LauncherSettings file
+        /// </summary>
+        public bool ExpandEnvironmentVariables { get; set; }
     }
 }

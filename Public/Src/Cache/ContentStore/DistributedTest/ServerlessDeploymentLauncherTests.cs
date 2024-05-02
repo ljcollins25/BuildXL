@@ -115,6 +115,43 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             return base.TestFullDeployment();
         }
 
+        //[Fact]
+        [Fact(Skip = "Manual testing only")]
+        public async Task TestLauncher()
+        {
+            var settings = new LauncherSettings()
+            {
+                ServiceUrl = Environment.GetEnvironmentVariable("CodexWebDeploymentUrl"),
+                RetentionSizeGb = 5,
+                DeploymentParameters = new DeploymentParameters()
+                {
+                    Environment = "Dev",
+                    Properties =
+                    {
+                        { "AspNetUrls", "http://*:38080" }
+                    }
+                },
+                ServiceLifetimePollingIntervalSeconds = 10,
+                TargetDirectory = @"C:\tools\launcher"
+            };
+
+            var launcher = new DeploymentLauncher(
+                settings,
+                FileSystem,
+                new DeploymentLauncherHost(new FileServerDeploymentClient(new(settings.ServiceUrl))));
+
+            using var cts = new CancellationTokenSource();
+            var context = new OperationContext(new Context(Logger), cts.Token);
+
+            await launcher.StartupAsync(context).ThrowIfFailureAsync();
+
+            await launcher.GetDownloadAndRunDeployment(context).ShouldBeSuccess();
+
+            await Task.Delay(TimeSpan.FromMinutes(10));
+
+            await launcher.ShutdownAsync(context).ThrowIfFailureAsync();
+        }
+
         protected override async Task PostDeploymentVerifyAsync()
         {
             var files = WriteFiles(deploymentRoot, new()

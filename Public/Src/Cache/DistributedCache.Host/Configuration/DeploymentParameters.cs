@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.ContractsLight;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using BuildXL.Cache.ContentStore.Interfaces.Logging;
 using BuildXL.Cache.ContentStore.UtilitiesCore.Internal;
 
@@ -31,6 +32,26 @@ namespace BuildXL.Cache.Host.Configuration
         public string MachineFunction { get; set; }
         public string ServiceVersion { get; set; }
         public string ConfigurationId { get; set; }
+        public string OS { get; set; } = GetOSPlatform();
+
+        private static string GetOSPlatform()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                return nameof(OSPlatform.Linux);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                return nameof(OSPlatform.OSX);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return nameof(OSPlatform.Windows);
+            }
+
+            return null;
+        }
+
         public DateTime UtcNow { get; set; } = DateTime.UtcNow;
 
         public HostParameters Copy(PreprocessorParameters overrides = null)
@@ -67,6 +88,7 @@ namespace BuildXL.Cache.Host.Configuration
                 Region = getValueOrDefault(nameof(Region)),
                 MachineFunction = getValueOrDefault(nameof(MachineFunction)),
                 ServiceVersion = getValueOrDefault(nameof(ServiceVersion)),
+                OS = getValueOrDefault(nameof(OS)),
                 // Not using the default value for ConfigurationId.
                 ConfigurationId = getValue(nameof(ConfigurationId)),
             };
@@ -120,6 +142,7 @@ namespace BuildXL.Cache.Host.Configuration
             setValue(Region);
             setValue(MachineFunction);
             setValue(ServiceDir);
+            setValue(OS);
 
             void setValue(string value, [CallerArgumentExpression(nameof(value))]string name = null)
             {

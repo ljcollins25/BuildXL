@@ -100,7 +100,7 @@ namespace BuildXL.Cache.Host.Service
                             {
                                 var executablePath = ExpandTokens(tool.Executable);
 
-                                if (!tool.ResolveToolPath)
+                                if (tool.ResolveToolPath)
                                 {
                                     if (!Path.IsPathRooted(executablePath))
                                     {

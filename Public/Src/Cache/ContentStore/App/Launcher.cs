@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using BuildXL.Cache.ContentStore.Distributed.Utilities;
 using BuildXL.Cache.ContentStore.Interfaces.Results;
 using BuildXL.Cache.ContentStore.Interfaces.Tracing;
 using BuildXL.Cache.ContentStore.Tracing.Internal;
@@ -29,7 +30,8 @@ namespace BuildXL.Cache.ContentStore.App
             (
             [Required, Description("Path to LauncherSettings file")] string settingsPath,
             [DefaultValue(false)] bool debug,
-            [DefaultValue(false)] bool shutdown = false
+            [DefaultValue(false)] bool shutdown = false,
+            [Description("Override url for service")] string serviceUrl = null
             )
         {
             Initialize();
@@ -43,7 +45,15 @@ namespace BuildXL.Cache.ContentStore.App
             {
                 var configJson = File.ReadAllText(settingsPath);
 
-                var settings = JsonSerializer.Deserialize<LauncherApplicationSettings>(configJson, DeploymentUtilities.ConfigurationSerializationOptions);
+                var settings = JsonUtilities.JsonDeserialize<LauncherApplicationSettings>(configJson);
+
+                if (settings.ExpandEnvironmentVariables)
+                {
+                    configJson = Environment.ExpandEnvironmentVariables(configJson);
+                    settings = JsonUtilities.JsonDeserialize<LauncherApplicationSettings>(configJson);
+                }
+
+                settings.ServiceUrl = serviceUrl ?? settings.ServiceUrl;
 
                 var launcher = new DeploymentLauncher(settings, _fileSystem);
 
