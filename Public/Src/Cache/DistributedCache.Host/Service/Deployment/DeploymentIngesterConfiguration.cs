@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Web;
+using BuildXL.Cache.ContentStore.Extensions;
 using BuildXL.Cache.ContentStore.Interfaces.FileSystem;
 using BuildXL.Cache.ContentStore.Interfaces.Results;
 using BuildXL.Cache.Host.Service;
@@ -46,14 +47,17 @@ namespace BuildXL.Cache.Host.Service.Deployment
         AbsolutePath DeploymentRoot,
         AbsolutePath DeploymentConfigurationPath,
         IAbsFileSystem FileSystem,
-        ActionQueue ActionQueue = null)
+        ActionQueue ActionQueue = null,
+        string DeploymentManifestFileName = null)
     {
         /// <summary>
         /// Indicates whether ingester should skip Pin check to see if content exists in store and always attempt to upload content.
         /// </summary>
         public bool ForceUploadContent { get; set; }
 
-        public AbsolutePath DeploymentManifestPath { get; } = DeploymentUtilities.GetDeploymentManifestPath(DeploymentRoot);
+        public string DeploymentManifestFileName { get; init; } = DeploymentManifestFileName.NullIfEmpty() ?? DeploymentUtilities.DeploymentManifestFileName;
+
+        public AbsolutePath DeploymentManifestPath => DeploymentRoot / DeploymentManifestFileName;
 
         public ActionQueue ActionQueue { get; } = ActionQueue ?? new ActionQueue(Environment.ProcessorCount);
     }

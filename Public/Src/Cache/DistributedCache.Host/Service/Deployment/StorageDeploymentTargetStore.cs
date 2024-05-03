@@ -69,7 +69,7 @@ namespace BuildXL.Cache.Host.Service
         {
             return await context.PerformOperationAsync(
                 Tracer,
-                () => UploadFileAsync(context, DeploymentManifestPath, DeploymentUtilities.DeploymentManifestRelativePath.Path),
+                () => UploadFileAsync(context, DeploymentManifestPath, _configuration.DeploymentManifestFileName),
                 caller: "UploadDeploymentManifest");
         }
 

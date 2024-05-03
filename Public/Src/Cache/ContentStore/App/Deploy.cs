@@ -38,7 +38,8 @@ namespace BuildXL.Cache.ContentStore.App
             [Required, Description("Location of deployment manifest json file")] string deploymentConfigPath,
             [Description("Location of drop.exe to run to download drops")] string dropExePath,
             [Description("Personal access token to use to authenticate to drop service")] string dropToken,
-            [Description("Maximum size of files to retain"), DefaultValue(50)] int retentionSizeGb)
+            [Description("Maximum size of files to retain"), DefaultValue(50)] int retentionSizeGb,
+            [Aliases("m")][Description("Name of manifest file")] string manifestFileName = null)
         {
             try
             {
@@ -51,7 +52,8 @@ namespace BuildXL.Cache.ContentStore.App
                     SourceRoot: new AbsolutePath(sourceRoot),
                     DeploymentRoot: deploymentRoot,
                     DeploymentConfigurationPath: new AbsolutePath(deploymentConfigPath),
-                    FileSystem: _fileSystem);
+                    FileSystem: _fileSystem,
+                    DeploymentManifestFileName: manifestFileName);
 
                 var configuration = new DeploymentIngesterConfiguration(
                     baseConfiguration,

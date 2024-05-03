@@ -67,7 +67,14 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
                 DeploymentRoot: deploymentRoot,
                 DeploymentConfigurationPath: base.TestRootDirectoryPath / "DeploymentConfiguration.json",
                 FileSystem);
+
+            UpdateBaseConfiguration(ref baseConfig);
         }
+
+        protected virtual void UpdateBaseConfiguration(ref DeploymentIngesterBaseConfiguration configuration)
+        {
+        }
+
         [Fact]
         [Trait("Category", "WindowsOSOnly")] // TODO: investigate why
         public virtual async Task TestFullDeployment()

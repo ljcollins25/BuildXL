@@ -32,12 +32,16 @@ namespace BuildXL.Cache.Host.Service
 
         private readonly ClientWrapper _client = new();
 
-        public FileServerDeploymentClient(Uri sasUri)
+        public FileServerDeploymentClient(Uri manifestUri)
         {
             _processor = new(this);
-            _sasUri = sasUri;
 
-            _manifestUri = GetUri(DeploymentUtilities.DeploymentManifestRelativePath.Path);
+            var rootUriBuilder = new UriBuilder(manifestUri);
+            rootUriBuilder.Path = rootUriBuilder.Path.Substring(0, rootUriBuilder.Path.LastIndexOf('/'));
+
+            _sasUri = rootUriBuilder.Uri;
+
+            _manifestUri = manifestUri;
         }
 
         public Tracer Tracer { get; } = new Tracer(nameof(FileServerDeploymentClient));

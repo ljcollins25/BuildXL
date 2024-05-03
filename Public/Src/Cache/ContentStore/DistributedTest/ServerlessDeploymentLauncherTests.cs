@@ -90,6 +90,14 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             };
         }
 
+        protected override void UpdateBaseConfiguration(ref DeploymentIngesterBaseConfiguration configuration)
+        {
+            configuration = configuration with
+            {
+                DeploymentManifestFileName = "testmanifest.json"
+            };
+        }
+
         protected override DeploymentIngesterConfiguration ConfigureIngester()
         {
             var result = base.ConfigureIngester();
@@ -188,6 +196,10 @@ namespace BuildXL.Cache.ContentStore.Distributed.Test
             var deploymentContainerUri = UseFileUri
                 ? new UriBuilder() { Scheme = "file", Host = null, Path = deploymentRoot.Path }.Uri
                 : await StorageByAccountName.First().Value.GetContainerAsync().SelectResult(c => c.Uri);
+
+            var deploymentContainerUriBuilder = new UriBuilder(deploymentContainerUri);
+            deploymentContainerUriBuilder.Path = $"{deploymentContainerUriBuilder.Path.TrimEnd('/')}/{baseConfig.DeploymentManifestFileName}";
+            deploymentContainerUri = deploymentContainerUriBuilder.Uri;
 
             var host = new TestHost(deploymentContainerUri);
             var launcher = new DeploymentLauncher(

@@ -36,6 +36,11 @@ namespace BuildXL.Cache.ContentStore.Extensions
         }
 
         /// <summary>
+        /// Returns null if the string is empty otherwise returns the original string.
+        /// </summary>
+        public static string? NullIfEmpty(this string s) => string.IsNullOrEmpty(s) ? null : s;
+
+        /// <summary>
         /// Replaces the substring ignoring case
         /// </summary>
         public static string ReplaceIgnoreCase(this string str, string oldValue, string newValue)
