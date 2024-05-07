@@ -65,7 +65,10 @@ namespace BuildXL.Cache.ContentStore.UtilitiesCore.Internal
         {
             foreach (var entry in values.Entries)
             {
-                map[entry.Key] = entry.Value;
+                if (!values.AddOnly || !map.ContainsKey(entry.Key))
+                {
+                    map[entry.Key] = entry.Value;
+                }
             }
         }
 
@@ -83,16 +86,16 @@ namespace BuildXL.Cache.ContentStore.UtilitiesCore.Internal
         /// <summary>
         /// Wraps key value pairs in an <see cref="AddOrSetEntries{TKey, TValue}"/> for use with collection initializer.
         /// </summary>
-        public static AddOrSetEntries<TKey, TValue> ToAddOrSetEntries<TKey, TValue>(this IEnumerable<KeyValuePair<TKey, TValue>> entries)
+        public static AddOrSetEntries<TKey, TValue> ToAddOrSetEntries<TKey, TValue>(this IEnumerable<KeyValuePair<TKey, TValue>> entries, bool addOnly = false)
         {
-            return new(entries);
+            return new(entries, AddOnly: addOnly);
         }
 
         /// <summary>
         /// For use with <see cref="Add{TKey, TValue}(IDictionary{TKey, TValue}, AddOrSetEntries{TKey, TValue})"/> in collection initializer
         /// to allow setting items from a collection instead of add with throws if there is a duplicate.
         /// </summary>
-        public record struct AddOrSetEntries<TKey, TValue>(IEnumerable<KeyValuePair<TKey, TValue>> Entries);
+        public record struct AddOrSetEntries<TKey, TValue>(IEnumerable<KeyValuePair<TKey, TValue>> Entries, bool AddOnly = false);
 
         /// <summary>
         /// Compare two operands and returns true if two instances are equivalent.

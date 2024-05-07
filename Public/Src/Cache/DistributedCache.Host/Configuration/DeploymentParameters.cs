@@ -54,7 +54,7 @@ namespace BuildXL.Cache.Host.Configuration
 
         public DateTime UtcNow { get; set; } = DateTime.UtcNow;
 
-        public HostParameters Copy(PreprocessorParameters overrides = null)
+        public HostParameters Copy(PreprocessorParameters other = null, bool preferCurrentParameters = true)
         {
             var result = this with
             {
@@ -62,10 +62,10 @@ namespace BuildXL.Cache.Host.Configuration
                 Flags = new(Flags, StringComparer.OrdinalIgnoreCase)
             };
 
-            if (overrides != null)
+            if (other != null)
             {
-                result.Properties.Add(overrides.Properties.ToAddOrSetEntries());
-                result.Flags.Add(overrides.Flags.ToAddOrSetEntries());
+                result.Properties.Add(other.Properties.ToAddOrSetEntries(addOnly: preferCurrentParameters));
+                result.Flags.Add(other.Flags.ToAddOrSetEntries(addOnly: preferCurrentParameters));
             }
 
             return result;
