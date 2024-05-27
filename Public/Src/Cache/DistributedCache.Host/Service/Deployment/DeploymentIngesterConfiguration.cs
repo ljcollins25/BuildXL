@@ -59,6 +59,10 @@ namespace BuildXL.Cache.Host.Service.Deployment
 
         public AbsolutePath DeploymentManifestPath => DeploymentRoot / DeploymentManifestFileName;
 
+        public AbsolutePath GetDeploymentManifestIdPath() => DeploymentUtilities.GetDeploymentManifestIdPath(DeploymentManifestPath);
+
+        public string GetDeploymentManifestIdFileName() => DeploymentUtilities.GetDeploymentManifestIdPath(DeploymentManifestFileName);
+
         public ActionQueue ActionQueue { get; } = ActionQueue ?? new ActionQueue(Environment.ProcessorCount);
     }
 

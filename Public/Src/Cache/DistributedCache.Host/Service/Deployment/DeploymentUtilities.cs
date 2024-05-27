@@ -48,9 +48,14 @@ namespace BuildXL.Cache.Host.Service
         public static JsonDocumentOptions ConfigurationDocumentOptions => JsonUtilities.DefaultDocumentOptions;
 
         /// <summary>
-        /// Name of the deployment manifest file in storage
+        /// Default name of the deployment manifest file in storage
         /// </summary>
         public static string DeploymentManifestFileName { get; } = "DeploymentManifest.json";
+
+        /// <summary>
+        /// Suffix of deployment manifest id file. Deployment manifest id file name is Path.GetFileNameWithoutExtension(manifestFilePath) + <see cref="DeploymentManifestIdSuffix"/>
+        /// </summary>
+        public static string DeploymentManifestIdSuffix { get; } = "Id.txt";
 
         /// <summary>
         /// Relative path to root of CAS for deployment files
@@ -58,7 +63,7 @@ namespace BuildXL.Cache.Host.Service
         private static RelativePath CasRelativeRoot { get; } = new RelativePath("cas");
 
         /// <summary>
-        /// Relative path to deployment manifest reference file from deployment root
+        /// Default relative path to deployment manifest reference file from deployment root
         /// </summary>
         private static RelativePath DeploymentManifestIdRelativePath { get; } = new RelativePath("DeploymentManifestId.txt");
 
@@ -109,9 +114,18 @@ namespace BuildXL.Cache.Host.Service
         /// <summary>
         /// Gets the absolute path to the deployment manifest reference file
         /// </summary>
-        public static AbsolutePath GetDeploymentManifestIdPath(AbsolutePath deploymentRoot)
+        public static string GetDeploymentManifestIdPath(string manifestPath)
         {
-            return deploymentRoot / DeploymentManifestIdRelativePath;
+            var extension = System.IO.Path.GetExtension(manifestPath);
+            return manifestPath.Substring(0, manifestPath.Length - extension.Length) + DeploymentManifestIdSuffix;
+        }
+
+        /// <summary>
+        /// Gets the absolute path to the deployment manifest reference file
+        /// </summary>
+        public static AbsolutePath GetDeploymentManifestIdPath(AbsolutePath manifestPath)
+        {
+            return new AbsolutePath(GetDeploymentManifestIdPath(manifestPath.Path));
         }
 
         /// <summary>

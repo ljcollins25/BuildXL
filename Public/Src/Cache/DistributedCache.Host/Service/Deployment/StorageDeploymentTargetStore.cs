@@ -65,11 +65,18 @@ namespace BuildXL.Cache.Host.Service
             return BoolResult.Success;
         }
 
-        public async Task<BoolResult> FinalizeIngestionAsync(OperationContext context)
+        public Task<BoolResult> FinalizeIngestionAsync(OperationContext context)
         {
-            return await context.PerformOperationAsync(
+            return context.PerformOperationAsync(
                 Tracer,
-                () => UploadFileAsync(context, DeploymentManifestPath, _configuration.DeploymentManifestFileName),
+                async () =>
+                {
+                    await UploadFileAsync(context, DeploymentManifestPath, _configuration.DeploymentManifestFileName).ThrowIfFailureAsync();
+
+                    await UploadFileAsync(context, _configuration.GetDeploymentManifestIdPath(), _configuration.GetDeploymentManifestIdFileName()).ThrowIfFailureAsync();
+
+                    return BoolResult.Success;
+                },
                 caller: "UploadDeploymentManifest");
         }
 

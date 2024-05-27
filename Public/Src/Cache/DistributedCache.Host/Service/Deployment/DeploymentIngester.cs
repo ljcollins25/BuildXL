@@ -271,7 +271,7 @@ namespace BuildXL.Cache.Host.Service
                 AtomicWriteFileText(path, manifestText);
 
                 // Write the deployment manifest id file used for up to date check by deployment service
-                AtomicWriteFileText(DeploymentUtilities.GetDeploymentManifestIdPath(DeploymentRoot), DeploymentUtilities.ComputeContentId(manifestText));
+                AtomicWriteFileText(Configuration.GetDeploymentManifestIdPath(), DeploymentUtilities.ComputeContentId(manifestText));
                 return BoolResult.Success;
             },
             extraStartMessage: $"DropCount={Drops.Count}").ThrowIfFailure<BoolResult>();

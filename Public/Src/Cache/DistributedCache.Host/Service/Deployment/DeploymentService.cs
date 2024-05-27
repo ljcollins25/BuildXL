@@ -87,6 +87,10 @@ namespace BuildXL.Cache.Host.Service
 
         private DeploymentProcessor<CentralStorage> DeploymentProcessor { get; }
 
+        private AbsolutePath DeploymentManifestPath { get; }
+
+        private AbsolutePath DeploymentManifestIdPath { get; }
+
         /// <summary>
         /// For testing purposes only. Used to intercept call to create blob central storage
         /// </summary>
@@ -108,6 +112,9 @@ namespace BuildXL.Cache.Host.Service
             ProxyManagers = new VolatileMap<string, Lazy<ProxyManager>>(clock);
 
             UploadQueue = new ActionQueue(uploadConcurrency);
+
+            DeploymentManifestPath = GetDeploymentManifestPath(DeploymentRoot);
+            DeploymentManifestIdPath = GetDeploymentManifestIdPath(DeploymentManifestPath);
 
             DeploymentProcessor = new(this);
         }
@@ -372,7 +379,7 @@ namespace BuildXL.Cache.Host.Service
         {
             var manifestId = GetOrAddExpirableValue(CachedDeploymentInfo, "MANIFEST_ID", TimeSpan.FromMinutes(1), () =>
             {
-                return File.ReadAllText(DeploymentUtilities.GetDeploymentManifestIdPath(DeploymentRoot).Path);
+                return File.ReadAllText(DeploymentManifestIdPath.Path);
             });
 
             return manifestId;
@@ -384,7 +391,7 @@ namespace BuildXL.Cache.Host.Service
 
             var cachedValue = GetOrAddExpirableValue(CachedDeploymentInfo, manifestId, TimeSpan.FromMinutes(10), () =>
             {
-                var manifestText = File.ReadAllText(DeploymentUtilities.GetDeploymentManifestPath(DeploymentRoot).Path);
+                var manifestText = File.ReadAllText(DeploymentManifestPath.Path);
 
                 var manifest = JsonUtilities.JsonDeserialize<DeploymentManifest>(manifestText);
                 manifest.ChangeId = manifestId;
@@ -408,7 +415,7 @@ namespace BuildXL.Cache.Host.Service
 
             var cachedValue = GetOrAddExpirableValue(CachedDeploymentInfo, manifestId, TimeSpan.FromMinutes(10), () =>
             {
-                var manifestText = File.ReadAllText(DeploymentUtilities.GetDeploymentManifestPath(DeploymentRoot).Path);
+                var manifestText = File.ReadAllText(DeploymentManifestPath.Path);
 
                 var manifest = JsonUtilities.JsonDeserialize<DeploymentManifest>(manifestText);
                 manifest.ChangeId = manifestId;

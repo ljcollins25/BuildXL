@@ -29,19 +29,36 @@ namespace BuildXL.Cache.Host.Service
 
         private readonly Uri _sasUri;
         private readonly Uri _manifestUri;
+        private readonly Uri _manifestIdUri;
+
 
         private readonly ClientWrapper _client = new();
 
-        public FileServerDeploymentClient(Uri manifestUri)
+        public FileServerDeploymentClient(Uri uri)
         {
             _processor = new(this);
 
-            var rootUriBuilder = new UriBuilder(manifestUri);
-            rootUriBuilder.Path = rootUriBuilder.Path.Substring(0, rootUriBuilder.Path.LastIndexOf('/'));
+            var rootUriBuilder = new UriBuilder(uri);
 
-            _sasUri = rootUriBuilder.Uri;
+            if (string.IsNullOrEmpty(rootUriBuilder.Fragment))
+            {
+                rootUriBuilder.Path = rootUriBuilder.Path.Substring(0, rootUriBuilder.Path.LastIndexOf('/'));
+                _sasUri = rootUriBuilder.Uri;
+                _manifestUri = uri;
+            }
+            else
+            {
+                var manifestPath = rootUriBuilder.Fragment.TrimStart('#');
+                rootUriBuilder.Fragment = null;
+                _sasUri = rootUriBuilder.Uri;
+                _manifestUri = GetUri(manifestPath);
+            }
 
-            _manifestUri = manifestUri;
+            var manifestIdUri = new UriBuilder(_manifestUri);
+            var extension = Path.GetExtension(manifestIdUri.Path);
+            manifestIdUri.Path = manifestIdUri.Path.Substring(0, manifestIdUri.Path.Length - extension.Length) + DeploymentUtilities.DeploymentManifestIdSuffix;
+
+            _manifestIdUri = manifestIdUri.Uri;
         }
 
         public Tracer Tracer { get; } = new Tracer(nameof(FileServerDeploymentClient));
@@ -85,17 +102,14 @@ namespace BuildXL.Cache.Host.Service
             return downloadUri;
         }
 
-        public async Task<string> GetChangeIdAsync(OperationContext context, LauncherSettings settings)
+        public Task<string> GetChangeIdAsync(OperationContext context, LauncherSettings settings)
         {
-            var request = new HttpRequestMessage(HttpMethod.Head, _manifestUri);
-            HttpResponseMessage response = await _client.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            return GetChangeId(response);
+            return GetChangeIdAsync();
         }
 
-        private static string GetChangeId(HttpResponseMessage response)
+        private Task<string> GetChangeIdAsync()
         {
-            return response.Headers.ETag.Tag;
+            return ReadJsonAsync<string>(_manifestIdUri);
         }
 
         public async Task<LauncherManifest> GetLaunchManifestAsync(OperationContext context, LauncherSettings settings)
@@ -106,9 +120,11 @@ namespace BuildXL.Cache.Host.Service
 
         public async Task<DeploymentManifestResult> GetManifestAsync()
         {
+            var changeId = await GetChangeIdAsync();
+
             var manifest = await ReadJsonAsync<DeploymentManifest>(_manifestUri, (manifest, response) =>
             {
-                manifest.ChangeId = GetChangeId(response);
+                manifest.ChangeId = changeId;
             });
 
             var configurationHash = manifest.GetDeploymentConfigurationSpec().Hash;
