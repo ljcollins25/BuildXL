@@ -2,8 +2,10 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.ContractsLight;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using BuildXL.Cache.ContentStore.Interfaces.Logging;
@@ -76,7 +78,8 @@ namespace BuildXL.Cache.Host.Configuration
         /// </summary>
         public static HostParameters FromEnvironment(
             IDictionary<string, string> customEnvironment = null,
-            string prefix = HostPrefix)
+            string prefix = HostPrefix,
+            bool addEnvironmentProperties = false)
         {
             var result = new HostParameters()
             {
@@ -88,18 +91,31 @@ namespace BuildXL.Cache.Host.Configuration
                 Region = getValueOrDefault(nameof(Region)),
                 MachineFunction = getValueOrDefault(nameof(MachineFunction)),
                 ServiceVersion = getValueOrDefault(nameof(ServiceVersion)),
-                OS = getValueOrDefault(nameof(OS)),
+                OS = getValueOrDefault(nameof(OS), GetOSPlatform()),
                 // Not using the default value for ConfigurationId.
                 ConfigurationId = getValue(nameof(ConfigurationId)),
             };
 
+            if (addEnvironmentProperties)
+            {
+                customEnvironment ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    System.Environment.GetEnvironmentVariables()
+                        .OfType<DictionaryEntry>()
+                        .Select(e => new KeyValuePair<string, string>(e.Key.ToString(), e.Value?.ToString()))
+                        .ToAddOrSetEntries()
+                };
+
+                result.Properties.Add(customEnvironment.ToAddOrSetEntries(addOnly: true));
+            }
+
             return result;
 
-            string getValueOrDefault(string name)
+            string getValueOrDefault(string name, string defaultValue = "Default")
             {
                 string value = getValue(name);
-                
-                return !string.IsNullOrEmpty(value) ? value : "Default";
+
+                return !string.IsNullOrEmpty(value) ? value : defaultValue;
             }
 
             string getValue(string name)

@@ -45,13 +45,12 @@ namespace BuildXL.Cache.ContentStore.App
             {
                 var configJson = File.ReadAllText(settingsPath);
 
-                var settings = JsonUtilities.JsonDeserialize<LauncherApplicationSettings>(configJson);
+                configJson = DeploymentUtilities.Preprocess(
+                    configJson,
+                    HostParameters.FromEnvironment(addEnvironmentProperties: true),
+                    useInlinedParameters: true);
 
-                if (settings.ExpandEnvironmentVariables)
-                {
-                    configJson = Environment.ExpandEnvironmentVariables(configJson);
-                    settings = JsonUtilities.JsonDeserialize<LauncherApplicationSettings>(configJson);
-                }
+                var settings = JsonUtilities.JsonDeserialize<LauncherApplicationSettings>(configJson);
 
                 settings.ServiceUrl = serviceUrl ?? settings.ServiceUrl;
                 settings.DeploymentParameters ??= new();

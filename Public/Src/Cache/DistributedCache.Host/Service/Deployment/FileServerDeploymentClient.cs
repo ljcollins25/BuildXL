@@ -25,12 +25,12 @@ namespace BuildXL.Cache.Host.Service
     /// </summary>
     public class FileServerDeploymentClient : IDeploymentServiceInnerClient, IDeploymentProcessorHost<Unit>
     {
-        private readonly DeploymentProcessor<Unit> _processor;
+        public Tracer Tracer { get; } = new Tracer(nameof(FileServerDeploymentClient));
 
+        private readonly DeploymentProcessor<Unit> _processor;
         private readonly Uri _sasUri;
         private readonly Uri _manifestUri;
         private readonly Uri _manifestIdUri;
-
 
         private readonly ClientWrapper _client = new();
 
@@ -60,8 +60,6 @@ namespace BuildXL.Cache.Host.Service
 
             _manifestIdUri = manifestIdUri.Uri;
         }
-
-        public Tracer Tracer { get; } = new Tracer(nameof(FileServerDeploymentClient));
 
         public void Dispose()
         {
