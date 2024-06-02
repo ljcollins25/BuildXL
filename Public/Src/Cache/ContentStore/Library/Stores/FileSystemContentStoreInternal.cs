@@ -2453,7 +2453,7 @@ namespace BuildXL.Cache.ContentStore.Stores
             AbsolutePath tempPath = GetTemporaryFileName(contentHash);
             try
             {
-                await FileSystem.CopyFileAsync(sourcePath, tempPath, false);
+                await FileSystem.CopyFileAsync(sourcePath, tempPath, replaceExisting: true);
                 ApplyPermissions(context, tempPath, FileAccessMode.ReadOnly);
                 FileSystem.MoveFile(tempPath, destinationPath, replacementMode == FileReplacementMode.ReplaceExisting);
             }
