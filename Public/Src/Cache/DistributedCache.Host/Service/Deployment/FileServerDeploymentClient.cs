@@ -164,11 +164,12 @@ namespace BuildXL.Cache.Host.Service
             if (!string.IsNullOrEmpty(keyVaultUri))
             {
                 var uri = new Uri(keyVaultUri, UriKind.RelativeOrAbsolute);
-                if (!uri.IsAbsoluteUri || uri.IsFile)
+                if (!uri.IsAbsoluteUri)
                 {
-                    var secretsFileUri = GetUri(uri.IsAbsoluteUri ? uri.LocalPath : keyVaultUri);
-                    secrets = await ReadJsonAsync<CaseInsensitiveMap>(secretsFileUri, preprocessParameters: parameters);
+                    uri = GetUri(uri.LocalPath);
                 }
+
+                secrets = await ReadJsonAsync<CaseInsensitiveMap>(uri, preprocessParameters: parameters);
 
                 // TODO: Query blob storage to get key map?
             }
